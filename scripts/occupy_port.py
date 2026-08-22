@@ -2,8 +2,8 @@
 """
 简单端口占用脚本：绑定并监听一个 TCP 端口，直到 Ctrl+C 退出。
 
-用于测试 DeskAgent 的 port_query 工具（查看占用进程）以及配合
-bash 工具执行 kill 命令释放端口。
+用于测试 DeskAgent 的 system_query 工具（category='port'，查看占用进程）
+以及配合 bash 工具执行 kill 命令释放端口。
 
 运行：
     uv run python scripts/occupy_port.py            # 默认占用 5173
@@ -38,7 +38,7 @@ def main() -> int:
         return 1
 
     print(f"[占用中] {args.host}:{args.port}  (pid={os.getpid()})")
-    print("  可用 DeskAgent 查询：port_query(port={}, proto='tcp')".format(args.port))
+    print(f"  可用 DeskAgent 查询：system_query(category='port', port={args.port}, proto='tcp')")
     print("  按 Ctrl+C 释放端口退出")
     try:
         while True:
@@ -46,7 +46,7 @@ def main() -> int:
             conn, _ = sock.accept()
             conn.close()
     except KeyboardInterrupt:
-        print("\n[已释放] 端口 {} 已关闭".format(args.port))
+        print(f"\n[已释放] 端口 {args.port} 已关闭")
     finally:
         sock.close()
     return 0

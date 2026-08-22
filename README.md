@@ -13,7 +13,7 @@ DeskAgent 是一个**本地 AI Agent 运行时**（mini 版 Claude Code）：以
 - **会话记忆 + 上下文治理**：Session / notes 分层延续上下文，水位检测、tool_result 截断、自动/手动压缩（`/compact`）
 - **Skills**：Markdown front-matter 定义行为预设与工具白名单，三级查找覆盖，无需改代码扩展
 - **子 Agent + MCP**：`spawn_agent` 前台/后台编排、事件桥接；MCP 客户端支持 stdio / TCP 接入外部工具
-- **系统监控**：内置 `system_monitor` 工具，psutil 采集 CPU / 内存 / 磁盘 / 网络 / 进程 / 电池 / GPU / OS 状态，只读、零审批打扰
+- **统一系统查询**：内置 `system_query` 工具，一个工具多类别（monitor 系统监控 / port 端口占用 / software 已安装软件），psutil + 注册表只读采集，零审批打扰
 - **三层 Trace + Textual TUI**：IPC / Event / LLM 全链路落盘可回放；TUI 流式渲染、内联审批、Skill 补全
 
 ## 架构
@@ -119,8 +119,7 @@ command = "/path/to/mcp-server"
 | `read_file` / `list_dir` | 读取文件 / 列出目录 | 允许 |
 | `write_file` | 写入文件 | 询问 |
 | `bash` | 执行 shell 命令（访问 cwd 之外路径**强制询问**） | 询问 |
-| `system_monitor` | 查询系统状态（CPU / 内存 / 磁盘 / 网络 / 进程 / 电池 / GPU / OS） | 允许 |
-| `port_query` | 查询端口占用（PID / 进程 / 状态，并附上可直接执行的 kill 命令，配合 bash 释放端口） | 允许 |
+| `system_query` | 统一查询工具：`category=monitor` 系统状态（CPU / 内存 / 磁盘 / 网络 / 进程 / 电池 / GPU / OS）、`category=port` 端口占用（PID / 进程 / kill 建议）、`category=software` 已安装软件（注册表，Windows，可用 `name_filter` 过滤） | 允许 |
 | `note_save` | 保存会话笔记 | 允许 |
 | `task_create` / `task_update` / `task_list` / `task_get` | 子任务管理 | 询问 |
 | `spawn_agent` / `agent_result` | 派生子 Agent / 获取后台结果 | 询问 |

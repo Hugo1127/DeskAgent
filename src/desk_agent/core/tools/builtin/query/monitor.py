@@ -1,3 +1,12 @@
+"""系统监控实现：system_query 工具的 monitor 类别。
+
+只读采集 CPU / 内存 / 磁盘 / 网络 / 进程 / 电池 / GPU / OS 状态，
+不提供任何写操作；所有采集函数绝不抛出，异常时返回可读的提示文本。
+
+本模块只提供实现（collect + 参数模型），不定义 BaseTool——
+统一入口在 query/tool.py 的 SystemQueryTool。
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -8,8 +17,6 @@ from typing import Any, Literal
 
 import psutil
 from pydantic import BaseModel, ConfigDict, Field
-
-from desk_agent.core.tools.base import BaseTool, ToolResult
 
 _GPU_QUERY_TIMEOUT = 5.0
 _NET_SAMPLE_MAX_S = 3.0
@@ -298,84 +305,22 @@ def _collect_overview() -> str:
     return "\n".join(lines)
 
 
-class SystemMonitorTool(BaseTool):
-    params_model = SystemMonitorParams
-    name = "system_monitor"
-    description = (
-        "Query local system status (CPU, memory, disk, network, processes, battery, "
-        "GPU, OS info). Read-only. Use scope='overview' for a quick summary, or a "
-        "specific scope for details: 'cpu', 'memory', 'disk', 'network', 'process', "
-        "'battery', 'gpu', 'os'. For processes, sort by cpu/memory and limit with "
-        "top_n; pass pid to inspect a single process."
-    )
-    input_schema: dict[str, object] = {
-        "type": "object",
-        "properties": {
-            "scope": {
-                "type": "string",
-                "enum": [
-                    "overview", "cpu", "memory", "disk", "network",
-                    "process", "battery", "gpu", "os",
-                ],
-                "description": "What to query (default 'overview').",
-            },
-            "sort_by": {
-                "type": "string",
-                "enum": ["cpu", "memory"],
-                "description": "Sort processes by cpu or memory (scope='process').",
-            },
-            "top_n": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 50,
-                "description": "Number of top processes to list (default 10).",
-            },
-            "disk_path": {
-                "type": "string",
-                "description": "Filter disk partitions by mountpoint (scope='disk').",
-            },
-            "pid": {
-                "type": "integer",
-                "description": "Inspect a single process by pid (scope='process').",
-            },
-            "sample_s": {
-                "type": "number",
-                "minimum": 0.2,
-                "maximum": 3.0,
-                "description": "Network sampling duration in seconds (default 1.0).",
-            },
-        },
-        "required": [],
-    }
-
-    # 按 scope 分发到各采集实现；任何异常都收敛为 ToolResult 错误，绝不抛出
-    async def invoke(self, params: dict[str, object]) -> ToolResult:
-        try:
-            p = SystemMonitorParams.model_validate(params)
-            content = await self._dispatch(p)
-        except Exception as exc:  # noqa: BLE001 - 工具边界：异常必须转为 ToolResult
-            return ToolResult(
-                content=f"system_monitor failed: {exc}",
-                is_error=True,
-                error_type="runtime_error",
-            )
-        return ToolResult(content=content)
-
-    async def _dispatch(self, p: SystemMonitorParams) -> str:
-        if p.scope == "cpu":
-            return _collect_cpu()
-        if p.scope == "memory":
-            return _collect_memory()
-        if p.scope == "disk":
-            return _collect_disk(p.disk_path)
-        if p.scope == "network":
-            return await _collect_network(p.sample_s)
-        if p.scope == "process":
-            return await _collect_process(p.top_n, p.sort_by, p.pid)
-        if p.scope == "battery":
-            return _collect_battery()
-        if p.scope == "gpu":
-            return await _collect_gpu()
-        if p.scope == "os":
-            return _collect_os()
-        return _collect_overview()
+# 按 scope 分发到各采集实现；任何异常由调用方（SystemQueryTool）收敛为 ToolResult 错误
+async def collect(p: SystemMonitorParams) -> str:
+    if p.scope == "cpu":
+        return _collect_cpu()
+    if p.scope == "memory":
+        return _collect_memory()
+    if p.scope == "disk":
+        return _collect_disk(p.disk_path)
+    if p.scope == "network":
+        return await _collect_network(p.sample_s)
+    if p.scope == "process":
+        return await _collect_process(p.top_n, p.sort_by, p.pid)
+    if p.scope == "battery":
+        return _collect_battery()
+    if p.scope == "gpu":
+        return await _collect_gpu()
+    if p.scope == "os":
+        return _collect_os()
+    return _collect_overview()

@@ -28,9 +28,8 @@ from desk_agent.core.tools.builtin import (
     BashTool,
     ListDirTool,
     NoteSaveTool,
-    PortQueryTool,
     ReadFileTool,
-    SystemMonitorTool,
+    SystemQueryTool,
     TaskCreateTool,
     TaskGetTool,
     TaskListTool,
@@ -103,8 +102,7 @@ class AgentRunner:
             BashTool(),
             WriteFileTool(),
             ListDirTool(),
-            SystemMonitorTool(),
-            PortQueryTool(),
+            SystemQueryTool(),
         ]:
             if _ok(t.name):
                 registry.register(t)

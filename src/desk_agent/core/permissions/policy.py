@@ -42,8 +42,7 @@ DEFAULT_POLICIES: dict[str, ToolPolicy] = {
     "write_file": ToolPolicy(default=PermissionDecision.ASK),
     "read_file":  ToolPolicy(default=PermissionDecision.ALLOW),
     "list_dir":   ToolPolicy(default=PermissionDecision.ALLOW),
-    "system_monitor": ToolPolicy(default=PermissionDecision.ALLOW),
-    "port_query": ToolPolicy(default=PermissionDecision.ALLOW),
+    "system_query": ToolPolicy(default=PermissionDecision.ALLOW),
     "note_save":  ToolPolicy(default=PermissionDecision.ALLOW),
 }
 
@@ -56,8 +55,7 @@ _PREVIEW_KEY: dict[str, str] = {
     "read_file":  "path",
     "write_file": "path",
     "list_dir":   "path",
-    "system_monitor": "scope",
-    "port_query": "port",
+    "system_query": "category",
     "note_save":  "content",
 }
 _PREVIEW_MAX = 60

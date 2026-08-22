@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+import pytest
+
 from desk_agent.core.tools.builtin.query import software
 
 
@@ -24,7 +26,7 @@ class _FakeWinreg:
             raise OSError("no more subkeys")
         return names[index]
 
-    def OpenKey(self, parent: Any, name: str) -> tuple[str, dict[str, Any]]:  # noqa: N802
+    def OpenKey(self, parent: Any, name: str) -> tuple[str, Any]:  # noqa: N802
         # 根键：query() 用注册表路径打开 Uninstall 根；子键：按名称打开
         if name in (software._ADD_REMOVE_PATH, software._WOW64_PATH):
             return ("root", name)
@@ -117,13 +119,13 @@ def test_format_no_match_and_none() -> None:
     assert "none found" in software._format([], name_filter="", max_results=10)
 
 
-def test_query_graceful_on_non_windows(monkeypatch) -> None:
+def test_query_graceful_on_non_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(software, "_IS_WINDOWS", False)
     out = software.query()
     assert "only available on Windows" in out
 
 
-def test_query_with_fake_winreg(monkeypatch) -> None:
+def test_query_with_fake_winreg(monkeypatch: pytest.MonkeyPatch) -> None:
     """注入假 winreg，验证 query() 的完整链路（三视图 → 去重 → 格式化）。"""
     fake = _FakeWinreg(
         {

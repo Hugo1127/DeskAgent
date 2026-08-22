@@ -150,7 +150,13 @@ class AnthropicProvider:
                 )
             elif block.type == "thinking":
                 # thinking blocks must be passed back verbatim in subsequent requests
-                thinking_blocks.append({"type": "thinking", "thinking": block.thinking, "signature": block.signature})
+                thinking_blocks.append(
+                    {
+                        "type": "thinking",
+                        "thinking": block.thinking,
+                        "signature": block.signature,
+                    }
+                )
 
         return LlmResponse(
             stop_reason=final_message.stop_reason or "end_turn",

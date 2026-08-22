@@ -42,7 +42,9 @@ def _parse_skill_file(path: Path) -> Skill:
                     fold = val == ">"
                     parts: list[str] = []
                     i += 1
-                    while i < len(lines) and (lines[i].startswith(" ") or lines[i].startswith("\t")):
+                    while i < len(lines) and (
+                        lines[i].startswith(" ") or lines[i].startswith("\t")
+                    ):
                         parts.append(lines[i].strip())
                         i += 1
                     description = (" ".join(parts) if fold else "\n".join(parts)).strip()

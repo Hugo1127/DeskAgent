@@ -64,7 +64,9 @@ class McpClient:
 
     # 通过 TCP 连接到 MCP server 并完成 initialize 握手
     async def connect_tcp(self, host: str, port: int) -> None:
-        self._reader, tcp_writer = await asyncio.open_connection(host, port, limit=self._STREAM_LIMIT)
+        self._reader, tcp_writer = await asyncio.open_connection(
+            host, port, limit=self._STREAM_LIMIT
+        )
         self._tcp_writer = tcp_writer
         self._transport = "tcp"
         await self._initialize()
@@ -90,7 +92,8 @@ class McpClient:
             ))
         return tools
 
-    # 调用 MCP server 上的工具，返回所有 text 内容拼接；连接异常抛 McpServerUnavailableError，工具错误抛 McpToolError
+    # 调用 MCP server 上的工具，返回所有 text 内容拼接；
+    # 连接异常抛 McpServerUnavailableError，工具错误抛 McpToolError
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         response = await self._call("tools/call", {"name": name, "arguments": arguments})
         parts: list[str] = []

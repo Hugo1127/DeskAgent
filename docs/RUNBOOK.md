@@ -70,9 +70,8 @@ uv run ruff check src tests scripts   # lint
 uv run mypy src                       # 类型检查
 uv run pytest tests/ -v               # 全量测试
 uv run pytest tests/unit/ -v         # 仅单元测试（无需启动 daemon）
-
-make docs                             # 重新生成 WIRE_PROTOCOL.md
-make verify-s0                        # 完整验证（lint + 类型 + 测试 + 协议同源检查）
+uv run python scripts/gen_protocol_doc.py          # 重新生成 WIRE_PROTOCOL.md
+uv run python scripts/gen_protocol_doc.py --check  # 校验协议文档与代码同源
 ```
 
 ---

@@ -103,6 +103,7 @@ async def test_port_occupied_reports_other_process() -> None:
         stderr=subprocess.DEVNULL,
         text=True,
     )
+    assert child.stdout is not None
     try:
         port = int(child.stdout.readline().strip())
         result = await SystemQueryTool().invoke(
@@ -200,7 +201,9 @@ def test_registry_registers_only_unified_tool() -> None:
     assert "system_monitor" not in names
     assert "port_query" not in names
     system_query_schema = next(s for s in schemas if s["name"] == "system_query")
-    assert system_query_schema["input_schema"]["required"] == []
+    input_schema = system_query_schema["input_schema"]
+    assert isinstance(input_schema, dict)
+    assert input_schema["required"] == []
 
 
 def test_default_policy_is_allow() -> None:

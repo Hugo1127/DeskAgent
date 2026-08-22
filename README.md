@@ -168,8 +168,8 @@ uv run ruff check src tests scripts   # lint
 uv run mypy src                       # 类型检查（strict）
 uv run pytest tests/unit -v           # 单元测试
 uv run pytest tests/integration -v    # 集成测试（双进程 / IPC）
-make docs                             # 重新生成 docs/WIRE_PROTOCOL.md
-make verify-s0                        # 完整验证（lint + 类型 + 测试 + 协议同源）
+uv run python scripts/gen_protocol_doc.py          # 重新生成 docs/WIRE_PROTOCOL.md
+uv run python scripts/gen_protocol_doc.py --check  # 校验协议文档与代码同源
 ```
 
 ## 相关文档

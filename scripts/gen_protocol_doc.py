@@ -333,10 +333,18 @@ def main() -> None:
     if args.check:
         output_path = Path(args.output)
         if not output_path.exists():
-            print(f"错误：未找到 {output_path} —— 请先运行：make docs", file=sys.stderr)
+            print(
+                f"错误：未找到 {output_path} —— 请先运行："
+                "uv run python scripts/gen_protocol_doc.py",
+                file=sys.stderr,
+            )
             sys.exit(1)
         if output_path.read_text(encoding="utf-8") != content:
-            print(f"错误：{output_path} 与代码不同步 —— 请运行：make docs", file=sys.stderr)
+            print(
+                f"错误：{output_path} 与代码不同步 —— 请运行："
+                "uv run python scripts/gen_protocol_doc.py",
+                file=sys.stderr,
+            )
             sys.exit(1)
         print(f"OK：{output_path} 已是最新。")
     else:

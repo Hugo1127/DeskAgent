@@ -6,8 +6,6 @@ import logging
 import time
 from typing import Any
 
-log = logging.getLogger(__name__)
-
 from rich.markdown import Markdown
 from textual import events
 from textual.app import App, ComposeResult
@@ -22,11 +20,11 @@ from desk_agent.core.config import DeskConfig
 from desk_agent.core.skills.loader import SkillLoader
 from desk_agent.core.transport.socket_client import IpcError, SocketClient
 
+log = logging.getLogger(__name__)
+
 
 def _preview(s: str, n: int) -> str:
     return s[:n] + "…" if len(s) > n else s
-
-
 
 
 def _params_str(params: dict[str, Any]) -> str:
@@ -204,7 +202,10 @@ class PermissionSelect(Static):
 
     # 焦点到达时记录，用于确认 focus() 是否真正生效
     def on_focus(self, event: events.Focus) -> None:
-        log.debug("PermissionSelect.on_focus  has_focus=%s  app.focused=%r", self.has_focus, self.app.focused)
+        log.debug(
+            "PermissionSelect.on_focus  has_focus=%s  app.focused=%r",
+            self.has_focus, self.app.focused,
+        )
 
     # 焦点离开时记录，用于追踪是否被其他控件抢走焦点
     def on_blur(self, event: events.Blur) -> None:
@@ -497,10 +498,10 @@ class DeskTuiApp(App[None]):
         "[bold cyan]| | | | |__ \\ `--.| |/ / / /_\\ \\ |  \\/| |__ |  \\| | | |  [/bold cyan]\n"
         "[bold cyan]| | | |  __| `--. \\    \\ |  _  | | __ |  __|| . ` | | |  [/bold cyan]\n"
         "[bold cyan]| |/ /| |___/\\__/ / |\\  \\| | | | |_\\ \\| |___| |\\  | | |  [/bold cyan]\n"
-        "[bold cyan]|___/ \\____/\\____/\\_| \\_/\\_| |_/\\____/\\____/\\_| \\_/ \\_/  [/bold cyan]\n"
+        "[bold cyan]|___/ \\____/\\____/\\_| \\_/\\_| |_/\\____/\\____/\\_| \\_/ \\_/  [/bold cyan]\n"  # noqa: E501
         "[bold cyan]                                                         [/bold cyan]\n"
         "[bold cyan]                                                         [/bold cyan]\n"
-        "[dim]  DeskAgent 个人桌面管家  ·  输入消息开始对话  ·  键入 / 触发 skill  ·  Ctrl+C 退出[/dim]"
+        "[dim]  DeskAgent 个人桌面管家  ·  输入消息开始对话  ·  键入 / 触发 skill  ·  Ctrl+C 退出[/dim]"  # noqa: E501
     )
 
     # 初始化连接参数和 TUI 内部状态
@@ -1025,10 +1026,14 @@ class DeskTuiApp(App[None]):
             self._append(perm_block)
             select = PermissionSelect(tool_use_id)
             self._mount_permission_select(select)
-            log.debug("PermissionSelect mounted before #prompt  pending=%d", len(self._pending_permission_blocks))
+            log.debug(
+                "PermissionSelect mounted before #prompt  pending=%d",
+                len(self._pending_permission_blocks),
+            )
 
         elif t == "permission.denied":
-            # 处理超时或断连等非用户交互触发的 deny（用户主动 deny 已由 on_permission_select_decided 处理）
+            # 处理超时或断连等非用户交互触发的 deny
+            # （用户主动 deny 已由 on_permission_select_decided 处理）
             tool_use_id = str(event.get("tool_use_id", ""))
             decision = str(event.get("decision", "denied"))
             if tool_use_id in self._pending_permission_blocks:

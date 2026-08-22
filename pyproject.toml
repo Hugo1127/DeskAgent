@@ -16,6 +16,7 @@ dependencies = [
     "anthropic>=0.25",     # Anthropic LLM SDK（流式 + prompt caching）
     "textual>=0.75",       # 终端 UI 框架（desk-tui）
     "httpx[socks]>=0.28.1",
+    "psutil>=5.9",         # 系统监控（CPU / 内存 / 磁盘 / 网络 / 进程 / 电池）
 ]
 
 # 安装后可在 PATH 中执行的入口：`desk` / `desk-core` / `desk-tui`
@@ -35,6 +36,7 @@ dev = [
     "mypy>=1.10",           # 静态类型检查
     "pytest>=8.0",          # 单元测试
     "pytest-asyncio>=0.23", # 异步测试支持
+    "types-psutil>=5.9",    # psutil 类型 stub（mypy strict 需要）
 ]
 
 # ---- Ruff：统一代码风格 ----

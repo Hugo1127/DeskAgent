@@ -13,6 +13,7 @@ DeskAgent 是一个**本地 AI Agent 运行时**（mini 版 Claude Code）：以
 - **会话记忆 + 上下文治理**：Session / notes 分层延续上下文，水位检测、tool_result 截断、自动/手动压缩（`/compact`）
 - **Skills**：Markdown front-matter 定义行为预设与工具白名单，三级查找覆盖，无需改代码扩展
 - **子 Agent + MCP**：`spawn_agent` 前台/后台编排、事件桥接；MCP 客户端支持 stdio / TCP 接入外部工具
+- **系统监控**：内置 `system_monitor` 工具，psutil 采集 CPU / 内存 / 磁盘 / 网络 / 进程 / 电池 / GPU / OS 状态，只读、零审批打扰
 - **三层 Trace + Textual TUI**：IPC / Event / LLM 全链路落盘可回放；TUI 流式渲染、内联审批、Skill 补全
 
 ## 架构
@@ -45,12 +46,15 @@ DeskAgent 是一个**本地 AI Agent 运行时**（mini 版 Claude Code）：以
 ```bash
 uv sync                                   # 1. 安装依赖
 cp .env.example .env                      # 2. 配置 .env（填入 ANTHROPIC_API_KEY）
-uv run desk core start                    # 3. 后台启动守护进程
+uv run desk core start                    # 3. 后台启动守护进程（静默，desk core stop 停止）
 uv run desk ping                          # 4. 验证连通
 uv run desk run --goal "总结 README.md 的主要章节"  # 5. 单次任务
 uv run desk chat                          # 6. 多轮对话
 uv run desk-tui                           # 7. 终端 UI
 ```
+
+> **前台运行（推荐开发/调试）**：`uv run desk-core` 直接在前台启动守护进程，日志实时打到
+> 终端、Ctrl+C 停止。与 `desk core start`（后台静默）二选一，两者互斥勿同时启动。
 
 ## 命令行
 
@@ -58,7 +62,8 @@ uv run desk-tui                           # 7. 终端 UI
 |------|------|
 | `desk --version` | 打印版本号 |
 | `desk ping` | 连通性检查（需 daemon 运行） |
-| `desk core start / stop / status` | 守护进程管理 |
+| `desk core start / stop / status` | 守护进程管理（后台运行） |
+| `desk-core` | 前台运行守护进程（日志进终端，Ctrl+C 停止） |
 | `desk run --goal "<目标>"` | 单次运行 Agent 任务（事件流实时打印） |
 | `desk chat` | 多轮会话，权限审批用 `y/a/n/d` 响应 |
 | `desk trace [run_id]` | 查看 trace（`--layer` / `--direction` / `--raw` / `--follow`） |
@@ -114,6 +119,7 @@ command = "/path/to/mcp-server"
 | `read_file` / `list_dir` | 读取文件 / 列出目录 | 允许 |
 | `write_file` | 写入文件 | 询问 |
 | `bash` | 执行 shell 命令（访问 cwd 之外路径**强制询问**） | 询问 |
+| `system_monitor` | 查询系统状态（CPU / 内存 / 磁盘 / 网络 / 进程 / 电池 / GPU / OS） | 允许 |
 | `note_save` | 保存会话笔记 | 允许 |
 | `task_create` / `task_update` / `task_list` / `task_get` | 子任务管理 | 询问 |
 | `spawn_agent` / `agent_result` | 派生子 Agent / 获取后台结果 | 询问 |

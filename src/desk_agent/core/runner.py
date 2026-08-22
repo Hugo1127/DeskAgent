@@ -28,6 +28,7 @@ from desk_agent.core.tools.builtin import (
     BashTool,
     ListDirTool,
     NoteSaveTool,
+    PortQueryTool,
     ReadFileTool,
     SystemMonitorTool,
     TaskCreateTool,
@@ -97,7 +98,14 @@ class AgentRunner:
             return allowed is None or name in allowed
 
         registry = ToolRegistry()
-        for t in [ReadFileTool(), BashTool(), WriteFileTool(), ListDirTool(), SystemMonitorTool()]:
+        for t in [
+            ReadFileTool(),
+            BashTool(),
+            WriteFileTool(),
+            ListDirTool(),
+            SystemMonitorTool(),
+            PortQueryTool(),
+        ]:
             if _ok(t.name):
                 registry.register(t)
         for t in [

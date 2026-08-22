@@ -1,6 +1,7 @@
 from desk_agent.core.tools.builtin.bash import BashTool
 from desk_agent.core.tools.builtin.list_dir import ListDirTool
 from desk_agent.core.tools.builtin.note_save import NoteSaveTool
+from desk_agent.core.tools.builtin.port import PortQueryTool
 from desk_agent.core.tools.builtin.read_file import ReadFileTool
 from desk_agent.core.tools.builtin.system_monitor import SystemMonitorTool
 from desk_agent.core.tools.builtin.task_create import TaskCreateTool
@@ -13,6 +14,7 @@ __all__ = [
     "BashTool",
     "ListDirTool",
     "NoteSaveTool",
+    "PortQueryTool",
     "ReadFileTool",
     "SystemMonitorTool",
     "TaskCreateTool",

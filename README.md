@@ -120,6 +120,7 @@ command = "/path/to/mcp-server"
 | `write_file` | 写入文件 | 询问 |
 | `bash` | 执行 shell 命令（访问 cwd 之外路径**强制询问**） | 询问 |
 | `system_monitor` | 查询系统状态（CPU / 内存 / 磁盘 / 网络 / 进程 / 电池 / GPU / OS） | 允许 |
+| `port_query` | 查询端口占用（PID / 进程 / 状态，并附上可直接执行的 kill 命令，配合 bash 释放端口） | 允许 |
 | `note_save` | 保存会话笔记 | 允许 |
 | `task_create` / `task_update` / `task_list` / `task_get` | 子任务管理 | 询问 |
 | `spawn_agent` / `agent_result` | 派生子 Agent / 获取后台结果 | 询问 |

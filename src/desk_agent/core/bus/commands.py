@@ -18,6 +18,19 @@ class PongResult(BaseModel):
     received_at: str  # ISO 8601
 
 
+# 连接握手：在 TLS 信道内提交令牌，成功后连接进入 AUTHENTICATED 状态
+class HelloCommand(BaseModel):
+    type: Literal["core.hello"] = "core.hello"
+    token: str   # 来自 ~/.desk/run/daemon.json（每次 daemon 启动轮换）
+    client: str  # 客户端标识，如 "tui/0.0.1"
+
+
+class HelloResult(BaseModel):
+    protocol_version: int
+    server_version: str
+    client_id: str
+
+
 class AgentRunCommand(BaseModel):
     type: Literal["agent.run"] = "agent.run"
     goal: str

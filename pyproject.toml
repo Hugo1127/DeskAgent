@@ -17,6 +17,7 @@ dependencies = [
     "textual>=0.75",       # 终端 UI 框架（desk-tui）
     "httpx[socks]>=0.28.1",
     "psutil>=5.9",         # 系统监控（CPU / 内存 / 磁盘 / 网络 / 进程 / 电池）
+    "cryptography>=42",
 ]
 
 # 安装后可在 PATH 中执行的入口：`desk` / `desk-core` / `desk-tui`

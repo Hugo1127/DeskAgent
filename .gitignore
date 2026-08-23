@@ -17,3 +17,7 @@ uv.lock
 *.log
 workspace/
 .desk/
+.e2e-home/
+.pytest-basetemp/
+tmp*/
+pytest-cache-files-*/

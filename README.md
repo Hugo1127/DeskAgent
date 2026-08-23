@@ -79,6 +79,7 @@ uv run desk-tui                           # 7. 终端 UI
 |------|--------|------|
 | `DESK_CONFIG` | `~/.desk/config.toml` | 覆盖配置文件路径 |
 | `DESK_HOST` / `DESK_PORT` | `127.0.0.1` / `7437` | TCP 监听地址 / 端口 |
+| `DESK_IPC_AUTH` / `DESK_IPC_TLS` | `true` / `true` | IPC 令牌握手认证 / TLS 传输加密（安全默认开启，`0` 关闭仅调试用） |
 | `DESK_LOG_LEVEL` / `DESK_LOG_FORMAT` | `INFO` / `text` | 日志级别 / 格式（`text` / `json`） |
 | `DESK_LOG_FILE` | `~/.desk/logs/core.log` | 日志文件路径 |
 | `DESK_MAX_STEPS` | `20` | Agent 单次 run 最大步数 |
@@ -94,6 +95,9 @@ uv run desk-tui                           # 7. 终端 UI
 [core]
 host = "127.0.0.1"
 port = 7437
+# IPC 通信安全（默认开启；auth=false/tls=false 仅调试用）
+auth = true
+tls = true
 
 [llm]
 default_model = "claude-sonnet-4-6"
@@ -176,4 +180,5 @@ uv run python scripts/gen_protocol_doc.py --check  # 校验协议文档与代码
 
 - [docs/WIRE_PROTOCOL.md](docs/WIRE_PROTOCOL.md) — 通信协议（由脚本自动生成，勿手动编辑）
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) — 运维手册（启动 / 停止 / 配置 / 常见错误）
+- [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — 性能优化方案（A/B/C/D 分级，含落地清单）
 

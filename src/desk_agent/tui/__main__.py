@@ -43,7 +43,7 @@ def main() -> None:
 
     config = get_config()
     _setup_logging(config.logging.level)
-    app = DeskTuiApp(config.host, config.port, replay_run_id=args.replay)
+    app = DeskTuiApp(config, replay_run_id=args.replay)
     app.run()
 
 

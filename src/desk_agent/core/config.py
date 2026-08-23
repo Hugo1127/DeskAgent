@@ -77,6 +77,10 @@ class McpConfig:
 class DeskConfig:
     host: str = _DEFAULT_HOST
     port: int = _DEFAULT_PORT
+    # IPC 通信安全（默认全开，见 docs/COMMUNICATION_SECURITY.md）：
+    # auth=False 关闭令牌握手认证；tls=False 关闭 TLS 传输加密（仅调试用）
+    auth: bool = True
+    tls: bool = True
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     agent: AgentConfig = field(default_factory=AgentConfig)
     llm: LlmConfig = field(default_factory=LlmConfig)
@@ -127,7 +131,7 @@ def _apply_toml(config: DeskConfig, data: dict[str, Any]) -> None:
         core = data["core"]
         if not isinstance(core, dict):
             raise SystemExit("Config error: [core] must be a table")
-        unknown_core: set[str] = set(core.keys()) - {"host", "port"}
+        unknown_core: set[str] = set(core.keys()) - {"host", "port", "auth", "tls"}
         if unknown_core:
             raise SystemExit(f"Unknown [core] keys: {', '.join(sorted(unknown_core))}")
         if "host" in core:
@@ -140,6 +144,12 @@ def _apply_toml(config: DeskConfig, data: dict[str, Any]) -> None:
             if not isinstance(val, int):
                 raise SystemExit("Config error: core.port must be an integer")
             config.port = val
+        for key in ("auth", "tls"):
+            if key in core:
+                val = core[key]
+                if not isinstance(val, bool):
+                    raise SystemExit(f"Config error: core.{key} must be a boolean")
+                setattr(config, key, val)
 
     if "logging" in data:
         log = data["logging"]
@@ -315,6 +325,14 @@ def _apply_env(config: DeskConfig) -> None:
             config.port = int(port_str)
         except ValueError:
             raise SystemExit(f"Config error: DESK_PORT must be an integer, got: {port_str!r}")
+
+    # IPC 通信安全开关（DESK_IPC_AUTH / DESK_IPC_TLS），默认开启
+    ipc_auth = os.environ.get("DESK_IPC_AUTH")
+    if ipc_auth is not None:
+        config.auth = ipc_auth.lower() not in ("0", "false", "no")
+    ipc_tls = os.environ.get("DESK_IPC_TLS")
+    if ipc_tls is not None:
+        config.tls = ipc_tls.lower() not in ("0", "false", "no")
 
     log_level = os.environ.get("DESK_LOG_LEVEL")
     if log_level is not None:

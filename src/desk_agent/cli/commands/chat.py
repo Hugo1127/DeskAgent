@@ -5,7 +5,8 @@ import sys
 from typing import Any
 
 from desk_agent.core.config import DeskConfig
-from desk_agent.core.transport.socket_client import IpcError, SocketClient
+from desk_agent.core.transport.helpers import connect_authenticated
+from desk_agent.core.transport.socket_client import IpcError
 
 _DECISION_MAP: dict[str, str] = {
     "y": "allow_once",
@@ -59,18 +60,16 @@ async def _readline(prompt: str) -> str:
     return await loop.run_in_executor(None, input, prompt)
 
 
-# 异步核心：创建 chat session，循环读取用户输入并发送到 daemon；权限请求时优先处理审批
+# 异步核心：创建 chat session（读 run 文件 + TLS + 令牌认证），循环读取用户输入并发送到 daemon
 async def _chat_async(config: DeskConfig) -> int:
-    client = SocketClient(config.host, config.port)
     try:
-        await client.connect()
+        client = await connect_authenticated(config)
     except (ConnectionRefusedError, OSError):
         print(f"error: core not running ({config.host}:{config.port})", file=sys.stderr)
         return 1
 
     printer = ChatPrinter()
     client.on_event(printer.handle)
-    loop_task = asyncio.create_task(client.run_event_loop())
 
     try:
         await client.send_command(
@@ -118,11 +117,6 @@ async def _chat_async(config: DeskConfig) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 1
     finally:
-        loop_task.cancel()
-        try:
-            await loop_task
-        except asyncio.CancelledError:
-            pass
         await client.close()
     return 0
 

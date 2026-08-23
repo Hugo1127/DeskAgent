@@ -7,7 +7,8 @@ import time
 from typing import Any
 
 from desk_agent.core.config import DeskConfig
-from desk_agent.core.transport.socket_client import IpcError, SocketClient
+from desk_agent.core.transport.helpers import connect_authenticated
+from desk_agent.core.transport.socket_client import IpcError
 
 
 class StdoutPrinter:
@@ -62,11 +63,10 @@ class StdoutPrinter:
             print(f"[run] {event.get('status', '')}  {event.get('steps')} steps  {elapsed:.1f}s")
 
 
-# 异步核心：连接 daemon，订阅事件，触发 run，等待 run.finished
+# 异步核心：连接 daemon（读 run 文件 + TLS + 令牌认证），订阅事件，触发 run，等待 run.finished
 async def _run_async(goal: str, config: DeskConfig) -> int:
-    client = SocketClient(config.host, config.port)
     try:
-        await client.connect()
+        client = await connect_authenticated(config)
     except (ConnectionRefusedError, OSError):
         print(f"error: core not running ({config.host}:{config.port})", file=sys.stderr)
         return 1
@@ -84,7 +84,6 @@ async def _run_async(goal: str, config: DeskConfig) -> int:
             finished.set()
 
     client.on_event(on_event)
-    loop_task = asyncio.create_task(client.run_event_loop())
 
     try:
         await client.send_command(
@@ -97,17 +96,10 @@ async def _run_async(goal: str, config: DeskConfig) -> int:
         await client.send_command("agent.run", {"goal": goal})
     except IpcError as e:
         print(f"error: {e}", file=sys.stderr)
-        loop_task.cancel()
         await client.close()
         return 1
 
     await finished.wait()
-
-    loop_task.cancel()
-    try:
-        await loop_task
-    except asyncio.CancelledError:
-        pass
 
     await client.close()
     return exit_code

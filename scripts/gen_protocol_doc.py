@@ -12,6 +12,8 @@ from desk_agent.core.bus.commands import (
     AgentRunResult,
     EventSubscribeCommand,
     EventSubscribeResult,
+    HelloCommand,
+    HelloResult,
     PingCommand,
     PongResult,
     SessionCloseCommand,
@@ -139,6 +141,23 @@ def generate() -> str:
         "method": "core.ping",
         "params": {"client": "cli/0.0.1"},
     }
+    hello_req_example = {
+        "jsonrpc": "2.0",
+        "id": "u-0",
+        "method": "core.hello",
+        "params": {"token": "<来自 ~/.desk/run/daemon.json>", "client": "tui/0.0.1"},
+        "seq": 1,
+        "ts": 1786782000,
+    }
+    hello_resp_example = {
+        "jsonrpc": "2.0",
+        "id": "u-0",
+        "result": {
+            "protocol_version": 1,
+            "server_version": "0.2.0",
+            "client_id": "3f2a9c1e8b7d4a6f",
+        },
+    }
     pong_resp_example = {
         "jsonrpc": "2.0",
         "id": "u-1",
@@ -212,10 +231,17 @@ def generate() -> str:
         "> DeskAgent 个人桌面管家 · 由 `scripts/gen_protocol_doc.py` 自动生成。**请勿手动编辑。**\n\n",
         "## 传输层（Transport）\n\n",
         "- TCP 回环地址 `127.0.0.1:7437`（可通过 `DESK_HOST` / `DESK_PORT` 覆盖）\n",
+        "- **传输安全**：默认启用 TLS（自签证书 + 证书固定，见 docs/COMMUNICATION_SECURITY.md）\n",
         "- 每条消息为一行以 `\\n` 结尾的 JSON（NDJSON）\n",
+        "- 每条请求携带 `seq`（每连接单调递增，防重放）与 `ts`（epoch 秒时间戳，防过期重放）\n",
+        "- 连接后必须先 `core.hello` 提交令牌完成认证，未认证连接只能调用 `core.hello`\n",
         "- 命令使用 JSON-RPC 2.0（客户端 → 服务端）；事件使用 `kind=event` 信封（服务端 → 客户端）\n\n",
         "## 命令（Commands）\n\n",
         "所有命令均以 JSON-RPC 2.0 请求发送，通过 `params` 内的 `type` 字段进行路由。\n\n",
+        _model_section("HelloCommand", HelloCommand, hello_req_example),
+        "\n",
+        _model_section("HelloResult", HelloResult, hello_resp_example),
+        "\n",
         _model_section("PingCommand", PingCommand, ping_req_example),
         "\n",
         _model_section("PongResult", PongResult, pong_resp_example),
@@ -317,6 +343,11 @@ def generate() -> str:
         "| -32602 | 参数无效 | 参数校验失败 |\n",
         "| -32603 | 内部错误 | 处理器抛出未处理异常 |\n",
         "| -32000 | 应用错误 | 例如已有另一个运行正在进行中 |\n",
+        "| -32001 | 未认证 | 未认证连接或令牌错误 |\n",
+        "| -32002 | 无权操作 session | 未持有该 session |\n",
+        "| -32003 | 超出速率限制 | 触发速率限制 |\n",
+        "| -32004 | 令牌失效 | daemon 重启后旧连接 |\n",
+        "| -32005 | 报文过期/重放 | seq 重复或时间戳超出窗口 |\n",
     ]
     return "".join(sections)
 

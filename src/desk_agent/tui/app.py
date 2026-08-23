@@ -18,6 +18,7 @@ from textual.widgets import Label, Static, TextArea
 
 from desk_agent.core.config import DeskConfig
 from desk_agent.core.skills.loader import SkillLoader
+from desk_agent.core.transport.helpers import connect_authenticated
 from desk_agent.core.transport.socket_client import IpcError, SocketClient
 
 log = logging.getLogger(__name__)
@@ -505,10 +506,11 @@ class DeskTuiApp(App[None]):
     )
 
     # 初始化连接参数和 TUI 内部状态
-    def __init__(self, host: str, port: int, replay_run_id: str | None = None) -> None:
+    def __init__(self, config: DeskConfig, replay_run_id: str | None = None) -> None:
         super().__init__()
-        self._host = host
-        self._port = port
+        self._config = config
+        self._host = config.host
+        self._port = config.port
         self._replay_run_id = replay_run_id
         self._client: SocketClient | None = None
         self._current_llm: LLMStreamBlock | None = None
@@ -759,15 +761,15 @@ class DeskTuiApp(App[None]):
             f"{session}  [{color}]{state}[/{color}]"
         )
 
-    # 管理 SocketClient 生命周期：连接、订阅事件、断线重连
+    # 管理 SocketClient 生命周期：读 run 文件认证连接、订阅事件、断线重连
+    # （每次重连重新读取 run 文件，daemon 重启后令牌/端口/证书轮换自动生效）
     async def _socket_loop(self) -> None:
         header = self.query_one("#header", Label)
 
         while True:
-            client = SocketClient(self._host, self._port)
             self._client = None
             try:
-                await client.connect()
+                client = await connect_authenticated(self._config)
             except (ConnectionRefusedError, OSError):
                 log.warning("connection refused %s:%s, retrying", self._host, self._port)
                 self._update_header("disconnected")
@@ -777,7 +779,6 @@ class DeskTuiApp(App[None]):
             log.info("connected to %s:%s", self._host, self._port)
             self._client = client
             self._update_header("connecting")
-            loop_task = asyncio.create_task(client.run_event_loop())
 
             async def on_event(event: dict[str, Any]) -> None:
                 self._handle_event(event)
@@ -785,11 +786,13 @@ class DeskTuiApp(App[None]):
             client.on_event(on_event)
 
             try:
-                loop_task.add_done_callback(
-                    lambda t: log.error("loop_task failed: %s", t.exception())
-                    if not t.cancelled() and t.exception() is not None
-                    else None
-                )
+                task = client.loop_task
+                if task is not None:
+                    task.add_done_callback(
+                        lambda t: log.error("loop_task failed: %s", t.exception())
+                        if not t.cancelled() and t.exception() is not None
+                        else None
+                    )
                 params: dict[str, Any] = {
                     "topics": [
                         "session.*",
@@ -819,12 +822,10 @@ class DeskTuiApp(App[None]):
                     prompt.border_title = "type a message — enter to send, ⌘/⇧/⌥+enter for newline"
                     prompt.focus()
                 self._update_header("ready")
-                await loop_task
+                await client.wait_closed()
             except IpcError as e:
                 header.update(f"[bold]DeskAgent[/bold]  [red]subscribe error: {e}[/red]")
             finally:
-                if not loop_task.done():
-                    loop_task.cancel()
                 self._client = None
                 self._session_id = None
                 prompt = self._prompt()
@@ -1064,5 +1065,5 @@ class DeskTuiApp(App[None]):
 
 # TUI 入口：读取配置并启动 DeskTuiApp
 def run(config: DeskConfig, replay_run_id: str | None = None) -> None:
-    app = DeskTuiApp(config.host, config.port, replay_run_id=replay_run_id)
+    app = DeskTuiApp(config, replay_run_id=replay_run_id)
     app.run()

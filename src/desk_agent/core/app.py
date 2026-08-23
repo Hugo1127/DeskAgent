@@ -48,6 +48,7 @@ from desk_agent.core.runs import events_file, new_run_id
 from desk_agent.core.session import SessionManager, SessionStore
 from desk_agent.core.trace.record import TraceRecord
 from desk_agent.core.trace.writer import TraceWriter
+from desk_agent.core.transport import runfile, tls
 from desk_agent.core.transport.ipc_broadcaster import IpcEventBroadcaster
 from desk_agent.core.transport.socket_server import SocketServer, get_connection_writer
 
@@ -295,11 +296,27 @@ class CoreApp:
             provider=compact_provider,
         )
 
+        # IPC 通信安全：每实例随机令牌 + TLS 自签证书（见 docs/COMMUNICATION_SECURITY.md）
+        token = runfile.new_token()
+        ssl_context = None
+        cert_sha256 = None
+        if self._config.tls:
+            cert_sha256 = tls.generate_self_signed(
+                hosts=[self._config.host, "127.0.0.1", "localhost"],
+                key_path=runfile.key_file_path(),
+                cert_path=runfile.cert_file_path(),
+            )
+            ssl_context = tls.server_context(
+                runfile.cert_file_path(), runfile.key_file_path()
+            )
+
         server = SocketServer(
             self._config.host,
             self._config.port,
             self._broadcaster,
             trace=self._trace,
+            token=token if self._config.auth else None,
+            ssl_context=ssl_context,
         )
         server.register("core.ping", self._ping_handler)
         server.register("agent.run", self._agent_run_handler)
@@ -312,7 +329,20 @@ class CoreApp:
         server.register("session.compact", self._session_compact_handler)
 
         addr = await server.start()
-        logger.info("desk-core %s listening addr=%s", desk_agent.__version__, addr)
+        # 服务就绪后写 run 文件（token/port/pid/证书指纹），客户端据此连接
+        port = int(addr.rsplit(":", 1)[1])
+        runfile.write_daemon_file(
+            runfile.DaemonInfo(
+                token=token,
+                port=port,
+                pid=os.getpid(),
+                started_at=_now(),
+                version=desk_agent.__version__,
+                cert_sha256=cert_sha256,
+            )
+        )
+        logger.info("desk-core %s listening addr=%s auth=%s tls=%s",
+                    desk_agent.__version__, addr, self._config.auth, self._config.tls)
         logger.info("config: %s", self._config)
 
         loop = asyncio.get_running_loop()
@@ -339,6 +369,9 @@ class CoreApp:
         if self._mcp_manager is not None:
             await self._mcp_manager.stop_all()
         await server.stop()
+        # 清理 run 文件（含令牌与 PID 信息），客户端下次连接需重新读取
+        runfile.remove_daemon_file()
+        runfile.remove_legacy_pid_file()
         if self._trace is not None:
             await self._trace.stop()
 

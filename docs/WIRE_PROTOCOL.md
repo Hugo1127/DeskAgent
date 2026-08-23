@@ -5,12 +5,114 @@
 ## 传输层（Transport）
 
 - TCP 回环地址 `127.0.0.1:7437`（可通过 `DESK_HOST` / `DESK_PORT` 覆盖）
+- **传输安全**：默认启用 TLS（自签证书 + 证书固定，见 docs/COMMUNICATION_SECURITY.md）
 - 每条消息为一行以 `\n` 结尾的 JSON（NDJSON）
+- 每条请求携带 `seq`（每连接单调递增，防重放）与 `ts`（epoch 秒时间戳，防过期重放）
+- 连接后必须先 `core.hello` 提交令牌完成认证，未认证连接只能调用 `core.hello`
 - 命令使用 JSON-RPC 2.0（客户端 → 服务端）；事件使用 `kind=event` 信封（服务端 → 客户端）
 
 ## 命令（Commands）
 
 所有命令均以 JSON-RPC 2.0 请求发送，通过 `params` 内的 `type` 字段进行路由。
+
+### HelloCommand
+
+| 字段 | 类型 | 必填 |
+|---|---|---|
+| `type` | `string` | 否 |
+| `token` | `string` | 是 |
+| `client` | `string` | 是 |
+
+```json
+{
+  "properties": {
+    "type": {
+      "const": "core.hello",
+      "default": "core.hello",
+      "title": "类型",
+      "type": "string"
+    },
+    "token": {
+      "title": "令牌",
+      "type": "string"
+    },
+    "client": {
+      "title": "客户端标识",
+      "type": "string"
+    }
+  },
+  "required": [
+    "token",
+    "client"
+  ],
+  "title": "HelloCommand",
+  "type": "object"
+}
+```
+
+**示例：**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "u-0",
+  "method": "core.hello",
+  "params": {
+    "token": "<来自 ~/.desk/run/daemon.json>",
+    "client": "tui/0.0.1"
+  },
+  "seq": 1,
+  "ts": 1786782000
+}
+```
+
+### HelloResult
+
+| 字段 | 类型 | 必填 |
+|---|---|---|
+| `protocol_version` | `integer` | 是 |
+| `server_version` | `string` | 是 |
+| `client_id` | `string` | 是 |
+
+```json
+{
+  "properties": {
+    "protocol_version": {
+      "title": "Protocol Version",
+      "type": "integer"
+    },
+    "server_version": {
+      "title": "服务端版本",
+      "type": "string"
+    },
+    "client_id": {
+      "title": "Client Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "protocol_version",
+    "server_version",
+    "client_id"
+  ],
+  "title": "HelloResult",
+  "type": "object"
+}
+```
+
+**示例：**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "u-0",
+  "result": {
+    "protocol_version": 1,
+    "server_version": "0.2.0",
+    "client_id": "3f2a9c1e8b7d4a6f"
+  }
+}
+```
 
 ### PingCommand
 
@@ -1643,3 +1745,8 @@
 | -32602 | 参数无效 | 参数校验失败 |
 | -32603 | 内部错误 | 处理器抛出未处理异常 |
 | -32000 | 应用错误 | 例如已有另一个运行正在进行中 |
+| -32001 | 未认证 | 未认证连接或令牌错误 |
+| -32002 | 无权操作 session | 未持有该 session |
+| -32003 | 超出速率限制 | 触发速率限制 |
+| -32004 | 令牌失效 | daemon 重启后旧连接 |
+| -32005 | 报文过期/重放 | seq 重复或时间戳超出窗口 |

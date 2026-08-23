@@ -18,7 +18,7 @@ import uuid
 from typing import Any
 
 HOST = "127.0.0.1"
-PORT = 7437
+PORT = 9986
 GOAL = "用 bash 执行 `echo hello_permission_test`，把结果告诉我"
 
 

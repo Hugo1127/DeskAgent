@@ -25,7 +25,7 @@ DeskAgent 是一个**本地 AI Agent 运行时**（mini 版 Claude Code）：以
 └──────┬───────┘      └──────┬───────┘
        │                     │
        │   JSON-RPC 2.0 over NDJSON TCP
-       │   （默认 127.0.0.1:7437）
+       │   （默认 127.0.0.1:9986）
        ▼                     ▼
 ┌──────────────────────────────────────┐
 │            desk-core 守护进程          │
@@ -78,7 +78,7 @@ uv run desk-tui                           # 7. 终端 UI
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `DESK_CONFIG` | `~/.desk/config.toml` | 覆盖配置文件路径 |
-| `DESK_HOST` / `DESK_PORT` | `127.0.0.1` / `7437` | TCP 监听地址 / 端口 |
+| `DESK_HOST` / `DESK_PORT` | `127.0.0.1` / `9986` | TCP 监听地址 / 端口 |
 | `DESK_IPC_AUTH` / `DESK_IPC_TLS` | `true` / `true` | IPC 令牌握手认证 / TLS 传输加密（安全默认开启，`0` 关闭仅调试用） |
 | `DESK_LOG_LEVEL` / `DESK_LOG_FORMAT` | `INFO` / `text` | 日志级别 / 格式（`text` / `json`） |
 | `DESK_LOG_FILE` | `~/.desk/logs/core.log` | 日志文件路径 |
@@ -94,7 +94,7 @@ uv run desk-tui                           # 7. 终端 UI
 ```toml
 [core]
 host = "127.0.0.1"
-port = 7437
+port = 9986
 # IPC 通信安全（默认开启；auth=false/tls=false 仅调试用）
 auth = true
 tls = true
@@ -141,6 +141,7 @@ command = "/path/to/mcp-server"
 ```
 ~/.desk/
 ├── config.toml / policy.toml / context.md   # 配置 / 权限决策 / 全局上下文
+├── run/daemon.json + desk.crt + desk.key     # 运行信息（令牌 / 端口 / 证书指纹）
 ├── logs/  traces/daemon.jsonl               # 日志 / 三层 trace
 └── sessions/<id>/  agents/  skills/         # 会话与 run 事件 / 用户级角色 / 用户级 Skill
 ```

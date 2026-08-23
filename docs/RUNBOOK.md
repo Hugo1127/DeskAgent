@@ -8,7 +8,7 @@
 uv run desk-core
 ```
 
-默认监听 `127.0.0.1:7437`，按 `Ctrl+C` 优雅退出。
+默认监听 `127.0.0.1:9986`，按 `Ctrl+C` 优雅退出。
 
 ### 验证连通
 
@@ -27,14 +27,14 @@ kill $(pgrep -f desk-core)
 
 ## 配置
 
-优先级（低 → 高）：**内建默认值 → `~/.desk/config.toml` → `.env` → 系统环境变量**。
+优先级（低 → 高）：**内建默认值 → `~/.desk/config.toml` → `.desk/config.toml` → `.env` → 系统环境变量**。
 
 ### `~/.desk/config.toml`
 
 ```toml
 [core]
 host = "127.0.0.1"
-port = 7437
+port = 9986
 
 [logging]
 level  = "INFO"
@@ -56,7 +56,9 @@ cp .env.example .env
 |------|--------|------|
 | `DESK_CONFIG` | `~/.desk/config.toml` | 覆盖配置文件路径 |
 | `DESK_HOST` | `127.0.0.1` | TCP 监听地址 |
-| `DESK_PORT` | `7437` | TCP 监听端口 |
+| `DESK_PORT` | `9986` | TCP 监听端口 |
+| `DESK_IPC_AUTH` | `true` | IPC 令牌握手认证（`0` 关闭，仅调试用） |
+| `DESK_IPC_TLS` | `true` | IPC TLS 传输加密（自签证书 + 证书固定；`0` 关闭，仅调试用） |
 | `DESK_LOG_LEVEL` | `INFO` | 日志级别（DEBUG / INFO / WARNING / ERROR） |
 | `DESK_LOG_FILE` | `~/.desk/logs/core.log` | 日志文件路径（留空则仅输出 stderr） |
 | `DESK_LOG_FORMAT` | `text` | 日志格式（`text` 或 `json`） |
@@ -104,7 +106,7 @@ tail -f ~/.desk/logs/core.log
 
 | 报错 | 原因 | 处理 |
 |------|------|------|
-| `core already running at 127.0.0.1:7437` | 已有守护进程在运行 | `kill $(pgrep -f desk-core)` |
-| `core not running` | 未启动守护进程 | `uv run desk-core` |
-| `Address already in use` | 端口被其他进程占用 | `DESK_PORT=8000 uv run desk-core` |
+| `already running  (127.0.0.1:9986)` | 已有守护进程在运行 | `kill $(pgrep -f desk-core)` |
+| `error: core not running (127.0.0.1:9986)` | 未启动守护进程 | `uv run desk-core` |
+| `Address already in use` | 端口被其他进程占用 | `DESK_PORT=9987 uv run desk-core` |
 | `Config error: DESK_PORT must be an integer` | `.env` 或环境变量中端口值非整数 | 检查 `DESK_PORT` 的值 |

@@ -4,7 +4,7 @@
 
 ## 传输层（Transport）
 
-- TCP 回环地址 `127.0.0.1:7437`（可通过 `DESK_HOST` / `DESK_PORT` 覆盖）
+- TCP 回环地址 `127.0.0.1:9986`（可通过 `DESK_HOST` / `DESK_PORT` 覆盖）
 - **传输安全**：默认启用 TLS（自签证书 + 证书固定，见 docs/COMMUNICATION_SECURITY.md）
 - 每条消息为一行以 `\n` 结尾的 JSON（NDJSON）
 - 每条请求携带 `seq`（每连接单调递增，防重放）与 `ts`（epoch 秒时间戳，防过期重放）
@@ -108,7 +108,7 @@
   "id": "u-0",
   "result": {
     "protocol_version": 1,
-    "server_version": "0.2.0",
+    "server_version": "0.0.1",
     "client_id": "3f2a9c1e8b7d4a6f"
   }
 }
@@ -197,7 +197,7 @@
   "jsonrpc": "2.0",
   "id": "u-1",
   "result": {
-    "server_version": "0.2.0",
+    "server_version": "0.0.1",
     "uptime_ms": 12,
     "received_at": "2026-05-16T10:00:00.001Z"
   }

@@ -9,7 +9,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 _DEFAULT_HOST = "127.0.0.1"
-_DEFAULT_PORT = 7437
+_DEFAULT_PORT = 9986
 _DEFAULT_LOG_LEVEL = "INFO"
 _DEFAULT_LOG_FILE = "~/.desk/logs/core.log"
 _DEFAULT_LOG_FORMAT = "text"

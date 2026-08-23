@@ -8,32 +8,34 @@
 
 ## 1. 背景与目标
 
-DeskAgent 采用「常驻守护进程 + 多客户端」架构：`desk-core` 监听 TCP 回环端口，CLI / TUI 作为客户端接入，实现"断开不中断执行、重连可恢复订阅"。当前 TUI 与 core 的通信**没有任何安全措施**——任何本地进程都可以连接端口、下发命令、读取事件流，甚至可以伪造权限审批。
+DeskAgent 采用「常驻守护进程 + 多客户端」架构：`desk-core` 监听 TCP 回环端口，CLI / TUI 作为客户端接入，实现"断开不中断执行、重连可恢复订阅"。**改造前**，TUI 与 core 的通信没有任何安全措施——任何本地进程都可以连接端口、下发命令、读取事件流，甚至可以伪造权限审批。
 
 本文档的目标：
 
 1. 说清当前通信链路的安全现状与威胁模型；
 2. 给出可选方案与**推荐方案**（分阶段落地，先解决最高危问题）；
 3. 明确落地计划、涉及文件、测试与验证方式；
-4. **本阶段只产出设计，不改代码**。
+4. 记录落地状态与剩余工作（阶段 0/1/3 已实现，阶段 2 P1 待实施，见第 6 节）。
 
 ---
 
 ## 2. 现状分析
 
+> **基线注记**：第 2–4 节描述**改造前基线**（阶段 0 之前的状态）。阶段 0/1/3 落地后：S-1/S-2 认证门禁、S-6 传输加密（TLS + 证书固定）与应用层防重放已修复，S-3 所列方法已全部纳入认证门禁；阶段 2 P1 项（S-4/S-5/S-7/S-8，见 5.5/5.6/5.7）仍待实施。
+
 ### 2.1 当前通信链路
 
 ```
-┌──────────────┐   TCP 127.0.0.1:7437（明文 NDJSON）  ┌──────────────────┐
+┌──────────────┐   TCP 127.0.0.1:9986（TLS + 令牌认证，NDJSON）  ┌──────────────────┐
 │  TUI / CLI   │ ───────────────────────────────────▶ │   desk-core      │
 │ SocketClient │   JSON-RPC 2.0 请求 + 事件推送        │   SocketServer   │
 └──────────────┘ ◀─────────────────────────────────── └──────────────────┘
 ```
 
-- 传输：`asyncio.start_server` 监听 `host:port`，默认 `127.0.0.1:7437`（`core/config.py`，可被 `DESK_HOST` / `DESK_PORT` 覆盖，**允许配置成非回环地址**）；当前明文，计划升级为 TLS（见 5.8）；
+- 传输：`asyncio.start_server` 监听 `host:port`，默认 `127.0.0.1:9986`（`core/config.py`，可被 `DESK_HOST` / `DESK_PORT` 覆盖，**允许配置成非回环地址**）；已默认启用 TLS（自签证书 + 证书固定，见 5.8；`DESK_IPC_TLS=0` 仅调试用）；
 - 协议：每行一个 JSON（NDJSON）。命令为 JSON-RPC 2.0（客户端 → 服务端），事件用 `kind=event` 信封（服务端 → 客户端）；
-- 帧大小上限：`_MAX_LINE_BYTES = 64 MB`（`core/transport/socket_server.py:44`、`socket_client.py:13`），为兼容 MCP 大文件工具结果而设；
-- 每条命令独立 `asyncio.create_task` 执行，长任务（如 `session.send_message`）不阻塞读循环（`socket_server.py:157`）。
+- 帧大小上限：`_MAX_LINE_BYTES = 64 MB`（`core/transport/socket_server.py:87`、`socket_client.py:15`），为兼容 MCP 大文件工具结果而设；
+- 每条命令独立 `asyncio.create_task` 执行，长任务（如 `session.send_message`）不阻塞读循环（`socket_server.py:212`）。
 
 ### 2.2 数据面盘点（线上流动的数据）
 
@@ -106,7 +108,7 @@ DeskAgent 采用「常驻守护进程 + 多客户端」架构：`desk-core` 监�
 **S-1 伪造权限审批（权限体系绕过）**
 
 - 位置：`core/app.py` 的 `_permission_respond_handler` → `permission/manager.py:respond()`。`respond()` 只凭 `tool_use_id` 查表并 resolve Future，**不校验调用者身份**。
-- 攻击场景：恶意进程连上 7437 → `event.subscribe` 订阅 `permission.*` → 收到 `permission.requested` 后立即回复 `permission.respond {tool_use_id, decision: "always_allow"}`。核心中的 `bash` / `write_file` / 未知工具的所有 ASK 审批被自动放行，`always_allow` 还会经 `manager.py:_apply_response` **持久化到 `~/.desk/policy.toml`**——一次攻击，永久放行。
+- 攻击场景：恶意进程连上 9986 → `event.subscribe` 订阅 `permission.*` → 收到 `permission.requested` 后立即回复 `permission.respond {tool_use_id, decision: "always_allow"}`。核心中的 `bash` / `write_file` / 未知工具的所有 ASK 审批被自动放行，`always_allow` 还会经 `manager.py:_apply_response` **持久化到 `~/.desk/policy.toml`**——一次攻击，永久放行。
 - 这是整个产品安全边界的单点失效，**必须最先修复**。
 
 **S-2 会话与事件全量窃取**
@@ -125,7 +127,7 @@ DeskAgent 采用「常驻守护进程 + 多客户端」架构：`desk-core` 监�
 - **S-4 无连接身份与归属**：无法审计"谁"发起了命令；session 与连接无绑定，任何连接可操作任何 session（知道 id 即可）。
 - **S-5 无资源防护**：无连接数上限、无速率限制；`_MAX_LINE_BYTES = 64 MB` 对控制帧过大（内存 DoS 向量）；replay 无行数上限。
 - **S-6 传输层无完整性/机密性保护（P0）**：线上全明文——若 host 被配置为非回环地址（当前代码不阻止），报文在网络中可被窃听、篡改，且无服务端身份校验（MITM 可冒充 core）。在"网络传输不被篡改"的目标下，这是**必做项**（方案见 5.8），不再是纵深防御。
-- **S-7 固定端口可探测**：`7437` 固定，可被扫描/探测；`cmd_core_start` 的 `_ping_check` 只验证端口连通，任何占用该端口的服务都会被误判为"already running"。
+- **S-7 固定端口可探测**：`9986` 固定，可被扫描/探测；`cmd_core_start` 的 `_ping_check` 只验证端口连通，任何占用该端口的服务都会被误判为"already running"。
 - **S-8 数据残留**：IPC trace（`socket_server.py:_handle_line/_send`）把命令**完整 params 与响应**写入 `traces/daemon.jsonl`，含工具输出等敏感内容，无脱敏选项（LLM 层已有 `include_llm_payload` 开关，IPC 层没有）。
 
 ### 4.3 P2：可选的纵深防御
@@ -181,7 +183,7 @@ P2（可选增强）
 ```json
 {
   "token": "<256-bit urlsafe>",
-  "port": 7437,
+  "port": 9986,
   "pid": 12345,
   "started_at": "2026-05-16T10:00:00.000Z",
   "version": "0.0.1"
@@ -364,7 +366,7 @@ core.hello {token, client}  ──▶  core 用 hmac.compare_digest 校验
 | `cli/commands/ping.py`、`chat.py`、`run.py` | 统一走 `connect_authenticated` | ✅ |
 | `tui/app.py`、`tui/__main__.py` | connect 前读 run 文件取 token/port/证书（重连循环天然兼容轮换） | ✅ |
 | `scripts/gen_protocol_doc.py` | 登记 `core.hello` / `seq` / `ts` / 新错误码，重生成 WIRE_PROTOCOL.md | ✅ |
-| `README.md` / `docs/RUNBOOK.md` | 安全说明、配置项、故障排查 | ✅（README；RUNBOOK 待补） |
+| `README.md` / `docs/RUNBOOK.md` | 安全说明、配置项、故障排查 | ✅（README 与 RUNBOOK 均已更新） |
 | `pyproject.toml` | 新增依赖 `cryptography`（自签证书生成 / TLS 落地） | ✅ |
 
 ### 6.3 风险与缓解

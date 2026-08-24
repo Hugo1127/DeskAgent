@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
 
 @dataclass
 class ToolResult:
-    content: str
+    # str：纯文本结果；list：多 content blocks（如 text + image，见 read_image）
+    # 约定：is_error=True 时 content 恒为 str
+    content: str | list[dict[str, Any]]
     is_error: bool = False
     # "runtime_error" | "timeout" | "schema_error" | "permission_denied"
     error_type: str | None = None

@@ -121,6 +121,7 @@ command = "/path/to/mcp-server"
 | 工具 | 说明 | 默认权限 |
 |------|------|----------|
 | `read_file` / `list_dir` | 读取文件 / 列出目录 | 允许 |
+| `read_image` | 读取图片（png/jpg/jpeg/gif/webp，≤5MB），以视觉内容块返回，支持多模态识别（截图 / 图表 / 图片文字） | 允许 |
 | `write_file` | 写入文件 | 询问 |
 | `bash` | 执行 shell 命令（访问 cwd 之外路径**强制询问**） | 询问 |
 | `system_query` | 统一查询工具：`category=monitor` 系统状态（CPU / 内存 / 磁盘 / 网络 / 进程 / 电池 / GPU / OS）、`category=port` 端口占用（PID / 进程 / kill 建议）、`category=software` 已安装软件（注册表，Windows，可用 `name_filter` 过滤） | 允许 |

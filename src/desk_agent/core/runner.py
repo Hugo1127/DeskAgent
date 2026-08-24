@@ -29,6 +29,7 @@ from desk_agent.core.tools.builtin import (
     ListDirTool,
     NoteSaveTool,
     ReadFileTool,
+    ReadImageTool,
     SystemQueryTool,
     TaskCreateTool,
     TaskGetTool,
@@ -99,6 +100,7 @@ class AgentRunner:
         registry = ToolRegistry()
         for t in [
             ReadFileTool(),
+            ReadImageTool(),
             BashTool(),
             WriteFileTool(),
             ListDirTool(),

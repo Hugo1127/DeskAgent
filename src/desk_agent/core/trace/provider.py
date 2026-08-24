@@ -7,6 +7,7 @@ from typing import Any
 
 from desk_agent.core.events.bus import EventBus
 from desk_agent.core.llm.base import LLMProvider
+from desk_agent.core.llm.image_blocks import image_block_placeholder
 from desk_agent.core.llm.types import LlmResponse
 from desk_agent.core.trace.record import TraceRecord
 from desk_agent.core.trace.writer import TraceWriter
@@ -14,6 +15,36 @@ from desk_agent.core.trace.writer import TraceWriter
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+# 递归脱敏 content blocks：任意层级（顶层 user content 或 tool_result 内）的 image 块
+# 替换为占位符，防止 base64 数据撑爆 trace 文件
+def _redact_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for block in blocks:
+        btype = block.get("type")
+        if btype == "image":
+            out.append({"type": "image", "placeholder": image_block_placeholder(block)})
+        elif btype == "tool_result" and isinstance(block.get("content"), list):
+            redacted = dict(block)
+            redacted["content"] = _redact_blocks(block["content"])
+            out.append(redacted)
+        else:
+            out.append(block)
+    return out
+
+
+def _redact_messages(messages: list[dict[str, object]]) -> list[dict[str, object]]:
+    out: list[dict[str, object]] = []
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, list):
+            m = dict(msg)
+            m["content"] = _redact_blocks(content)
+            out.append(m)
+        else:
+            out.append(msg)
+    return out
 
 
 class TracingProvider:
@@ -42,7 +73,11 @@ class TracingProvider:
     ) -> LlmResponse:
         call_data: dict[str, Any]
         if self._include_payload:
-            call_data = {"messages": messages, "tool_schemas": tool_schemas, "system": system}
+            call_data = {
+                "messages": _redact_messages(messages),
+                "tool_schemas": tool_schemas,
+                "system": system,
+            }
         else:
             call_data = {
                 "message_count": len(messages),

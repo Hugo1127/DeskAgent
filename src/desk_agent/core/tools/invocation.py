@@ -16,6 +16,7 @@ from desk_agent.core.bus.events import (
     ToolCallStartedEvent,
 )
 from desk_agent.core.events.bus import EventBus
+from desk_agent.core.llm.image_blocks import image_block_placeholder
 from desk_agent.core.llm.types import ToolCallBlock
 from desk_agent.core.tools.base import ToolResult
 from desk_agent.core.tools.errors import RateLimitedError
@@ -32,6 +33,23 @@ _RETRYABLE: frozenset[str] = frozenset({"runtime_error", "rate_limited"})
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+# 将 ToolResult.content 转为 TUI/事件展示用的纯文本：str 原样返回；
+# list（如 text + image 块）拼接文本块并把 image 块替换为脱敏占位符
+def _display_content(content: str | list[dict[str, Any]]) -> str:
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for block in content:
+        btype = block.get("type")
+        if btype == "text":
+            parts.append(str(block.get("text", "")))
+        elif btype == "image":
+            parts.append(image_block_placeholder(block))
+        else:
+            parts.append(str(block))
+    return "\n".join(parts)
 
 
 # 发布 ToolCallFailedEvent 并返回对应 ToolResult
@@ -153,6 +171,7 @@ async def invoke_tool(
 
             if result.is_error:
                 error_class = result.error_type or "runtime_error"
+                assert isinstance(result.content, str), "error results must carry str content"
                 error_message = result.content
             else:
                 await bus.publish(
@@ -161,7 +180,7 @@ async def invoke_tool(
                         tool_use_id=tool_call.id,
                         tool_name=tool_call.name,
                         elapsed_ms=ms,
-                        output=result.content,
+                        output=_display_content(result.content),
                         ts=_now(),
                     )
                 )

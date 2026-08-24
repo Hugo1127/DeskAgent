@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from desk_agent.core.bus.events import ContextCompactedEvent
 from desk_agent.core.events.bus import EventBus
+from desk_agent.core.llm.image_blocks import estimate_image_tokens, image_block_placeholder
 
 if TYPE_CHECKING:
     from desk_agent.core.context import ExecutionContext
@@ -110,9 +111,7 @@ class Compactor:
     ) -> CompactionResult | None:
         from desk_agent.core.events.bus import EventBus as _Bus
 
-        original_estimate = sum(
-            len(str(m.get("content", ""))) for m in messages
-        ) // 4  # 粗略 token 估算（字符数 / 4）
+        original_estimate = _estimate_tokens(messages)
 
         history_text = _messages_to_text(messages)
         prompt = _COMPACT_PROMPT
@@ -172,20 +171,67 @@ def _messages_to_text(messages: list[dict[str, Any]]) -> str:
         if isinstance(content, str):
             parts.append(f"[{role}]\n{content}")
         elif isinstance(content, list):
-            blocks: list[str] = []
-            for block in content:
-                btype = block.get("type", "")
-                if btype == "text":
-                    blocks.append(block.get("text", ""))
-                elif btype == "tool_use":
-                    blocks.append(
-                        f"<tool_call name={block.get('name')} id={block.get('id')}>\n"
-                        f"{block.get('input', {})}\n</tool_call>"
-                    )
-                elif btype == "tool_result":
-                    blocks.append(
-                        f"<tool_result id={block.get('tool_use_id')}>\n"
-                        f"{block.get('content', '')}\n</tool_result>"
-                    )
-            parts.append(f"[{role}]\n" + "\n".join(blocks))
+            parts.append(f"[{role}]\n" + "\n".join(_content_blocks_to_text(content)))
     return "\n\n".join(parts)
+
+
+# 将 content blocks 渲染为纯文本；image 块用脱敏占位符，避免 base64 混入摘要请求
+def _content_blocks_to_text(blocks: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for block in blocks:
+        btype = block.get("type", "")
+        if btype == "text":
+            lines.append(str(block.get("text", "")))
+        elif btype == "image":
+            lines.append(image_block_placeholder(block))
+        elif btype == "tool_use":
+            lines.append(
+                f"<tool_call name={block.get('name')} id={block.get('id')}>\n"
+                f"{block.get('input', {})}\n</tool_call>"
+            )
+        elif btype == "tool_result":
+            lines.append(
+                f"<tool_result id={block.get('tool_use_id')}>\n"
+                f"{_render_tool_result_content(block.get('content', ''))}\n</tool_result>"
+            )
+    return lines
+
+
+# tool_result 的 content 可能是 str 或 blocks 列表（如图片），统一渲染为纯文本
+def _render_tool_result_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(_content_blocks_to_text(content))
+    return str(content)
+
+
+# 粗略 token 估算（字符数 / 4）；image 块按固定占位值计，避免 base64 文本被算成天量
+def _estimate_tokens(messages: list[dict[str, Any]]) -> int:
+    total = 0
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            total += len(content) // 4
+        elif isinstance(content, list):
+            total += _estimate_blocks_tokens(content)
+    return total
+
+
+def _estimate_blocks_tokens(blocks: list[dict[str, Any]]) -> int:
+    total = 0
+    for block in blocks:
+        btype = block.get("type", "")
+        if btype == "image":
+            total += estimate_image_tokens(block)
+        elif btype == "text":
+            total += len(str(block.get("text", ""))) // 4
+        elif btype == "tool_use":
+            total += len(str(block.get("input", {}))) // 4
+        elif btype == "tool_result":
+            content = block.get("content", "")
+            if isinstance(content, str):
+                total += len(content) // 4
+            elif isinstance(content, list):
+                total += _estimate_blocks_tokens(content)
+    return total

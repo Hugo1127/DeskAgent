@@ -49,7 +49,7 @@ class ExecutionContext:
 
     # 将工具调用结果追加为 user 消息；同一步的多个结果共享同一条消息
     def add_tool_result(
-        self, tool_use_id: str, content: str, is_error: bool = False
+        self, tool_use_id: str, content: str | list[dict[str, Any]], is_error: bool = False
     ) -> None:
         block: dict[str, Any] = {
             "type": "tool_result",

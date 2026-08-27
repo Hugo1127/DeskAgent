@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import signal
+import sys
 import threading
 import time
 from datetime import UTC
@@ -64,7 +65,6 @@ def _now() -> str:
     return datetime.datetime.now(UTC).isoformat()
 
 
-# 安装 SIGINT/SIGTERM 处理器：Windows 无 add_signal_handler 时回退到 signal.signal
 def _watchdog_force_exit() -> None:
     logger.error(
         "shutdown watchdog: shutdown exceeded %.0fs, forcing exit",
@@ -76,27 +76,6 @@ def _watchdog_force_exit() -> None:
     except Exception:
         pass
     os._exit(0)
-
-
-def _install_signal_handlers(
-    loop: asyncio.AbstractEventLoop, shutdown: asyncio.Event
-) -> None:
-    try:
-        loop.add_signal_handler(signal.SIGINT, shutdown.set)
-        loop.add_signal_handler(signal.SIGTERM, shutdown.set)
-    except NotImplementedError:
-        # Windows：无 add_signal_handler，改用 signal.signal + wakeup fd 及时唤醒空闲阻塞的循环
-        def _wake(_signum: int, _frame: Any) -> None:
-            loop.call_soon_threadsafe(shutdown.set)
-
-        csock = getattr(loop, "_csock", None)
-        if csock is not None:
-            try:
-                signal.set_wakeup_fd(csock.fileno())
-            except (ValueError, OSError):
-                pass
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            signal.signal(sig, _wake)
 
 
 class CoreApp:
@@ -347,7 +326,13 @@ class CoreApp:
 
         loop = asyncio.get_running_loop()
         shutdown = asyncio.Event()
-        _install_signal_handlers(loop, shutdown)
+        # 注册退出信号：Windows 的 loop 不支持 add_signal_handler，用 signal.signal + call_soon_threadsafe 替代
+        if sys.platform == "win32":
+            signal.signal(signal.SIGINT, lambda *_: loop.call_soon_threadsafe(shutdown.set))
+            signal.signal(signal.SIGTERM, lambda *_: loop.call_soon_threadsafe(shutdown.set))
+        else:
+            loop.add_signal_handler(signal.SIGINT, shutdown.set)
+            loop.add_signal_handler(signal.SIGTERM, shutdown.set)
 
         await shutdown.wait()
 

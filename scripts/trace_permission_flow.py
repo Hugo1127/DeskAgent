@@ -3,124 +3,101 @@
 DeskAgent 端到端权限审批流程诊断脚本
 
 模拟 TUI 的完整链路：
-  1. 连接 desk-core，订阅事件
-  2. 创建 session，发消息触发 bash 工具（bash 总是需要审批）
+  1. 连接 desk-core（读 run 文件 → TLS 证书固定 → core.hello 令牌认证）
+  2. 订阅事件，创建 session，发消息触发 bash 工具（bash 总是需要审批）
   3. 收到 permission.requested → 自动回复 allow_once
   4. 等待 run.finished，打印全部事件日志
+
+注意：脚本复用 CLI/TUI 统一的 connect_authenticated，协议要求
+core.hello 握手 + 每条请求带 seq/ts（防重放），手动拼 JSON 的老写法已不可用。
+
+前置条件：daemon 已启动（`desk core start`，或 `python -m desk_agent.core`）。
 
 运行：uv run python scripts/trace_permission_flow.py
 """
 from __future__ import annotations
 
 import asyncio
-import json
-import uuid
 from typing import Any
 
-HOST = "127.0.0.1"
-PORT = 9986
+from desk_agent.core.config import get_config
+from desk_agent.core.transport.helpers import connect_authenticated
+
 GOAL = "用 bash 执行 `echo hello_permission_test`，把结果告诉我"
 
 
-async def send(writer: asyncio.StreamWriter, method: str, params: dict[str, Any]) -> str:
-    req_id = str(uuid.uuid4())
-    msg = json.dumps({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params})
-    writer.write(msg.encode() + b"\n")
-    await writer.drain()
-    return req_id
-
-
 async def main() -> None:
-    print(f"[connect] {HOST}:{PORT}")
-    reader, writer = await asyncio.open_connection(HOST, PORT, limit=2 * 1024 * 1024)
+    config = get_config()
+    client = await connect_authenticated(config)
+    print("[connect] authenticated (TLS + token)")
 
-    pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
-    loop = asyncio.get_running_loop()
     events_log: list[dict[str, Any]] = []
     permission_event: dict[str, Any] | None = None
     finished = asyncio.Event()
 
-    # ── 读循环 ────────────────────────────────────────────────────────
-    async def read_loop() -> None:
+    # ── 事件回调（连接读循环内串行调用） ───────────────────────────────
+    async def on_event(event: dict[str, Any]) -> None:
         nonlocal permission_event
-        while True:
-            line = await reader.readline()
-            if not line:
-                print("[read_loop] connection closed")
-                finished.set()
-                return
-            msg: dict[str, Any] = json.loads(line)
+        t = event.get("type", "?")
+        events_log.append(event)
+        print(f"  [event] {t:35s}  {_brief(event)}")
 
-            # RPC 响应
-            if "jsonrpc" in msg:
-                req_id = msg.get("id")
-                if req_id and req_id in pending:
-                    fut = pending.pop(req_id)
-                    if not fut.done():
-                        if "error" in msg:
-                            fut.set_exception(RuntimeError(str(msg["error"])))
-                        else:
-                            fut.set_result(msg.get("result") or {})
-                continue
+        if t == "permission.requested":
+            permission_event = event
+            tool_use_id = event["tool_use_id"]
+            print(f"\n  *** 收到 permission.requested  tool={event['tool_name']}")
+            print(f"      param_preview={event.get('param_preview')!r}")
+            print("      → 自动回复 allow_once\n")
+            # 不能在这里 await send_command：事件回调阻塞读循环，响应永远读不到 → 死锁。
+            # 派发独立任务回复，读循环保持空闲继续消费后续事件。
+            respond_task = asyncio.create_task(
+                client.send_command(
+                    "permission.respond",
+                    {"tool_use_id": tool_use_id, "decision": "allow_once"},
+                )
+            )
+            respond_task.add_done_callback(
+                lambda t: t.exception() if not t.cancelled() else None
+            )
+        elif t == "run.finished":
+            finished.set()
 
-            # 推送事件
-            if msg.get("kind") == "event":
-                event = msg.get("event", {})
-                t = event.get("type", "?")
-                events_log.append(event)
-                print(f"  [event] {t:35s}  {_brief(event)}")
-
-                if t == "permission.requested":
-                    permission_event = event
-                    tool_use_id = event["tool_use_id"]
-                    print(f"\n  *** 收到 permission.requested  tool={event['tool_name']}")
-                    print(f"      param_preview={event.get('param_preview')!r}")
-                    print("      → 自动回复 allow_once\n")
-                    # 直接在读循环里发 permission.respond
-                    req_id2 = await send(writer, "permission.respond",
-                                         {"tool_use_id": tool_use_id, "decision": "allow_once"})
-                    fut2: asyncio.Future[dict[str, Any]] = loop.create_future()
-                    pending[req_id2] = fut2
-
-                if t == "run.finished":
-                    finished.set()
-
-    read_task = asyncio.create_task(read_loop())
+    client.on_event(on_event)
 
     # ── subscribe ─────────────────────────────────────────────────────
-    sub_id = await send(writer, "event.subscribe", {
+    sub_result = await client.send_command("event.subscribe", {
         "topics": ["session.*", "run.*", "step.*", "tool.*",
                    "llm.token", "llm.usage", "log.*", "permission.*"],
         "scope": "global",
     })
-    sub_fut: asyncio.Future[dict[str, Any]] = loop.create_future()
-    pending[sub_id] = sub_fut
-    sub_result = await sub_fut
     print(f"[subscribed] subscription_id={sub_result.get('subscription_id')}")
 
     # ── session.create ────────────────────────────────────────────────
-    sess_id = await send(writer, "session.create", {"mode": "chat"})
-    sess_fut: asyncio.Future[dict[str, Any]] = loop.create_future()
-    pending[sess_id] = sess_fut
-    sess_result = await sess_fut
+    sess_result = await client.send_command("session.create", {"mode": "chat"})
     session_id = sess_result["session_id"]
     print(f"[session]   session_id={session_id}")
 
     # ── session.send_message ──────────────────────────────────────────
     print(f"\n[send]      goal={GOAL!r}\n")
-    msg_id = await send(writer, "session.send_message",
-                        {"session_id": session_id, "content": GOAL})
-    msg_fut: asyncio.Future[dict[str, Any]] = loop.create_future()
-    pending[msg_id] = msg_fut
+    await client.send_command(
+        "session.send_message", {"session_id": session_id, "content": GOAL}
+    )
 
-    # ── 等最多 60 秒 ──────────────────────────────────────────────────
-    try:
-        await asyncio.wait_for(finished.wait(), timeout=60)
-    except TimeoutError:
-        print("\n[TIMEOUT] 60 秒内未收到 run.finished")
+    # ── 等最多 60 秒（连接断开时提前返回） ─────────────────────────────
+    wait_task = asyncio.create_task(finished.wait())
+    done, _ = await asyncio.wait(
+        {wait_task, client.loop_task},
+        timeout=60,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    if wait_task not in done:
+        if client.loop_task in done:
+            print("\n[disconnected] daemon 连接已断开")
+        else:
+            print("\n[TIMEOUT] 60 秒内未收到 run.finished")
+        wait_task.cancel()
 
-    read_task.cancel()
-    writer.close()
+    await client.close()
 
     print("\n── 汇总 ──")
     types = [e.get("type") for e in events_log]

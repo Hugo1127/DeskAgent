@@ -3,7 +3,7 @@
 desk-core 启动后把令牌、端口、PID、证书指纹写入 `~/.desk/run/daemon.json`，
 客户端（CLI / TUI）连接前读取该文件获取连接信息。
 
-安全要点（见 docs/COMMUNICATION_SECURITY.md 5.3）：
+安全要点（见 docs/COMMUNICATION_SECURITY.md）：
 - token 每次 daemon 启动随机生成（secrets.token_urlsafe(32)，256-bit）；
 - POSIX 下文件 chmod 0600，Windows 依赖用户目录 ACL；
 - token 绝不写入日志 / trace，只落盘本文件。

@@ -189,8 +189,7 @@ src/desk_agent/
 uv sync
 uv run ruff check src tests scripts   # lint
 uv run mypy src                       # 类型检查（strict）
-uv run pytest tests/unit -v           # 单元测试
-uv run pytest tests/integration -v    # 集成测试（双进程 / IPC）
+uv run pytest tests/ -v               # 全量测试（当前均为单元测试）
 uv run python scripts/gen_protocol_doc.py          # 重新生成 docs/WIRE_PROTOCOL.md
 uv run python scripts/gen_protocol_doc.py --check  # 校验协议文档与代码同源
 ```
@@ -199,5 +198,8 @@ uv run python scripts/gen_protocol_doc.py --check  # 校验协议文档与代码
 
 - [docs/WIRE_PROTOCOL.md](docs/WIRE_PROTOCOL.md) — 通信协议（由脚本自动生成，勿手动编辑）
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) — 运维手册（启动 / 停止 / 配置 / 常见错误）
-- [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — 性能优化方案（A/B/C/D 分级，含落地清单）
+- [docs/COMMUNICATION_SECURITY.md](docs/COMMUNICATION_SECURITY.md) — IPC 通信安全（令牌认证 + TLS + 防重放）
+- [docs/IMAGE_SUPPORT.md](docs/IMAGE_SUPPORT.md) — 图片多模态识别（read_image 工具）
+- [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — 性能优化方案（结论 + A/B/C/D 清单，规划中未落地）
+- [docs/NETWORK_SANDBOX.md](docs/NETWORK_SANDBOX.md) — 网络沙箱（L1 强制网络审批层，规划未实现）
 

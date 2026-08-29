@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 type CommandHandler = Callable[[dict[str, Any]], Awaitable[Any]]
 
-# IPC 协议版本（core.hello 握手时协商，见 docs/COMMUNICATION_SECURITY.md 5.10）
+# IPC 协议版本（core.hello 握手时协商，见 docs/COMMUNICATION_SECURITY.md）
 PROTOCOL_VERSION = 1
 # 请求时间戳可接受的最大偏差（秒），超出视为过期重放
 _TS_WINDOW_S = 60

@@ -17,38 +17,11 @@
 
 ### HelloCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `token` | `string` | 是 |
-| `client` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "core.hello",
-      "default": "core.hello",
-      "title": "类型",
-      "type": "string"
-    },
-    "token": {
-      "title": "令牌",
-      "type": "string"
-    },
-    "client": {
-      "title": "客户端标识",
-      "type": "string"
-    }
-  },
-  "required": [
-    "token",
-    "client"
-  ],
-  "title": "HelloCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `core.hello` | 否 | 类型 |
+| `token` | `string` | 是 | 令牌 |
+| `client` | `string` | 是 | 客户端标识 |
 
 **示例：**
 
@@ -68,37 +41,11 @@
 
 ### HelloResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `protocol_version` | `integer` | 是 |
-| `server_version` | `string` | 是 |
-| `client_id` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "protocol_version": {
-      "title": "Protocol Version",
-      "type": "integer"
-    },
-    "server_version": {
-      "title": "服务端版本",
-      "type": "string"
-    },
-    "client_id": {
-      "title": "Client Id",
-      "type": "string"
-    }
-  },
-  "required": [
-    "protocol_version",
-    "server_version",
-    "client_id"
-  ],
-  "title": "HelloResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `protocol_version` | `integer` | 是 | Protocol Version |
+| `server_version` | `string` | 是 | 服务端版本 |
+| `client_id` | `string` | 是 | Client Id |
 
 **示例：**
 
@@ -116,32 +63,10 @@
 
 ### PingCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `client` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "core.ping",
-      "default": "core.ping",
-      "title": "类型",
-      "type": "string"
-    },
-    "client": {
-      "title": "客户端标识",
-      "type": "string"
-    }
-  },
-  "required": [
-    "client"
-  ],
-  "title": "PingCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `core.ping` | 否 | 类型 |
+| `client` | `string` | 是 | 客户端标识 |
 
 **示例：**
 
@@ -158,37 +83,11 @@
 
 ### PongResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `server_version` | `string` | 是 |
-| `uptime_ms` | `integer` | 是 |
-| `received_at` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "server_version": {
-      "title": "服务端版本",
-      "type": "string"
-    },
-    "uptime_ms": {
-      "title": "运行时长（毫秒）",
-      "type": "integer"
-    },
-    "received_at": {
-      "title": "接收时间",
-      "type": "string"
-    }
-  },
-  "required": [
-    "server_version",
-    "uptime_ms",
-    "received_at"
-  ],
-  "title": "PongResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `server_version` | `string` | 是 | 服务端版本 |
+| `uptime_ms` | `integer` | 是 | 运行时长（毫秒） |
+| `received_at` | `string` | 是 | 接收时间 |
 
 **示例：**
 
@@ -206,32 +105,10 @@
 
 ### AgentRunCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `goal` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "agent.run",
-      "default": "agent.run",
-      "title": "类型",
-      "type": "string"
-    },
-    "goal": {
-      "title": "目标",
-      "type": "string"
-    }
-  },
-  "required": [
-    "goal"
-  ],
-  "title": "AgentRunCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `agent.run` | 否 | 类型 |
+| `goal` | `string` | 是 | 目标 |
 
 **示例：**
 
@@ -248,25 +125,9 @@
 
 ### AgentRunResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `run_id` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id"
-  ],
-  "title": "AgentRunResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `run_id` | `string` | 是 | 运行 ID |
 
 **示例：**
 
@@ -282,54 +143,12 @@
 
 ### EventSubscribeCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `topics` | `array` | 是 |
-| `scope` | `string` | 否 |
-| `replay_from_run` | `string | null` | 否 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "event.subscribe",
-      "default": "event.subscribe",
-      "title": "类型",
-      "type": "string"
-    },
-    "topics": {
-      "items": {
-        "type": "string"
-      },
-      "title": "订阅主题",
-      "type": "array"
-    },
-    "scope": {
-      "default": "global",
-      "title": "作用域",
-      "type": "string"
-    },
-    "replay_from_run": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "回放来源运行 ID"
-    }
-  },
-  "required": [
-    "topics"
-  ],
-  "title": "EventSubscribeCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `event.subscribe` | 否 | 类型 |
+| `topics` | `array` | 是 | 订阅主题 |
+| `scope` | `string`（默认: "global"） | 否 | 作用域 |
+| `replay_from_run` | `string | null` | 否 | 回放来源运行 ID |
 
 **示例：**
 
@@ -353,31 +172,10 @@
 
 ### EventSubscribeResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `subscription_id` | `string` | 是 |
-| `replayed_count` | `integer` | 否 |
-
-```json
-{
-  "properties": {
-    "subscription_id": {
-      "title": "订阅 ID",
-      "type": "string"
-    },
-    "replayed_count": {
-      "default": 0,
-      "title": "回放事件数",
-      "type": "integer"
-    }
-  },
-  "required": [
-    "subscription_id"
-  ],
-  "title": "EventSubscribeResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `subscription_id` | `string` | 是 | 订阅 ID |
+| `replayed_count` | `integer`（默认: 0） | 否 | 回放事件数 |
 
 **示例：**
 
@@ -394,40 +192,11 @@
 
 ### SessionCreateCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `mode` | `string` | 否 |
-| `title` | `string` | 否 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.create",
-      "default": "session.create",
-      "title": "类型",
-      "type": "string"
-    },
-    "mode": {
-      "default": "chat",
-      "enum": [
-        "one_shot",
-        "chat"
-      ],
-      "title": "会话模式",
-      "type": "string"
-    },
-    "title": {
-      "default": "",
-      "title": "标题",
-      "type": "string"
-    }
-  },
-  "title": "SessionCreateCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.create` | 否 | 类型 |
+| `mode` | `string`（枚举: one_shot / chat；默认: "chat"） | 否 | 会话模式 |
+| `title` | `string`（默认: ""） | 否 | 标题 |
 
 **示例：**
 
@@ -445,36 +214,10 @@
 
 ### SessionCreateResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `session_id` | `string` | 是 |
-| `status` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    },
-    "status": {
-      "enum": [
-        "active",
-        "waiting_for_input",
-        "closed"
-      ],
-      "title": "状态",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id",
-    "status"
-  ],
-  "title": "SessionCreateResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `session_id` | `string` | 是 | 会话 ID |
+| `status` | `string`（枚举: active / waiting_for_input / closed） | 是 | 状态 |
 
 **示例：**
 
@@ -491,38 +234,11 @@
 
 ### SessionSendMessageCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `session_id` | `string` | 是 |
-| `content` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.send_message",
-      "default": "session.send_message",
-      "title": "类型",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    },
-    "content": {
-      "title": "内容",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id",
-    "content"
-  ],
-  "title": "SessionSendMessageCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.send_message` | 否 | 类型 |
+| `session_id` | `string` | 是 | 会话 ID |
+| `content` | `string` | 是 | 内容 |
 
 **示例：**
 
@@ -540,25 +256,9 @@
 
 ### SessionSendMessageResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `run_id` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id"
-  ],
-  "title": "SessionSendMessageResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `run_id` | `string` | 是 | 运行 ID |
 
 **示例：**
 
@@ -574,310 +274,63 @@
 
 ### SessionGetHistoryCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `session_id` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.get_history",
-      "default": "session.get_history",
-      "title": "类型",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id"
-  ],
-  "title": "SessionGetHistoryCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.get_history` | 否 | 类型 |
+| `session_id` | `string` | 是 | 会话 ID |
 
 ### SessionGetHistoryResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `messages` | `array` | 是 |
-
-```json
-{
-  "properties": {
-    "messages": {
-      "items": {
-        "additionalProperties": true,
-        "type": "object"
-      },
-      "title": "消息列表",
-      "type": "array"
-    }
-  },
-  "required": [
-    "messages"
-  ],
-  "title": "SessionGetHistoryResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `messages` | `array` | 是 | 消息列表 |
 
 ### SessionCloseCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `session_id` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.close",
-      "default": "session.close",
-      "title": "类型",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id"
-  ],
-  "title": "SessionCloseCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.close` | 否 | 类型 |
+| `session_id` | `string` | 是 | 会话 ID |
 
 ### SessionCloseResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `status` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "status": {
-      "enum": [
-        "active",
-        "waiting_for_input",
-        "closed"
-      ],
-      "title": "状态",
-      "type": "string"
-    }
-  },
-  "required": [
-    "status"
-  ],
-  "title": "SessionCloseResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `status` | `string`（枚举: active / waiting_for_input / closed） | 是 | 状态 |
 
 ### SessionListCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.list",
-      "default": "session.list",
-      "title": "类型",
-      "type": "string"
-    }
-  },
-  "title": "SessionListCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.list` | 否 | 类型 |
 
 ### SessionListResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `sessions` | `array` | 是 |
-
-```json
-{
-  "$defs": {
-    "SessionSummary": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "mode": {
-          "title": "Mode",
-          "type": "string"
-        },
-        "title": {
-          "title": "Title",
-          "type": "string"
-        },
-        "status": {
-          "title": "Status",
-          "type": "string"
-        },
-        "created_at": {
-          "title": "Created At",
-          "type": "string"
-        },
-        "updated_at": {
-          "title": "Updated At",
-          "type": "string"
-        },
-        "run_count": {
-          "title": "Run Count",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "mode",
-        "title",
-        "status",
-        "created_at",
-        "updated_at",
-        "run_count"
-      ],
-      "title": "SessionSummary",
-      "type": "object"
-    }
-  },
-  "properties": {
-    "sessions": {
-      "items": {
-        "$ref": "#/$defs/SessionSummary"
-      },
-      "title": "会话摘要列表",
-      "type": "array"
-    }
-  },
-  "required": [
-    "sessions"
-  ],
-  "title": "SessionListResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `sessions` | `array` | 是 | 会话摘要列表 |
 
 ### SessionSummary
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `id` | `string` | 是 |
-| `mode` | `string` | 是 |
-| `title` | `string` | 是 |
-| `status` | `string` | 是 |
-| `created_at` | `string` | 是 |
-| `updated_at` | `string` | 是 |
-| `run_count` | `integer` | 是 |
-
-```json
-{
-  "properties": {
-    "id": {
-      "title": "会话 ID",
-      "type": "string"
-    },
-    "mode": {
-      "title": "会话模式",
-      "type": "string"
-    },
-    "title": {
-      "title": "标题",
-      "type": "string"
-    },
-    "status": {
-      "title": "状态",
-      "type": "string"
-    },
-    "created_at": {
-      "title": "创建时间",
-      "type": "string"
-    },
-    "updated_at": {
-      "title": "更新时间",
-      "type": "string"
-    },
-    "run_count": {
-      "title": "运行次数",
-      "type": "integer"
-    }
-  },
-  "required": [
-    "id",
-    "mode",
-    "title",
-    "status",
-    "created_at",
-    "updated_at",
-    "run_count"
-  ],
-  "title": "SessionSummary",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `id` | `string` | 是 | 会话 ID |
+| `mode` | `string` | 是 | 会话模式 |
+| `title` | `string` | 是 | 标题 |
+| `status` | `string` | 是 | 状态 |
+| `created_at` | `string` | 是 | 创建时间 |
+| `updated_at` | `string` | 是 | 更新时间 |
+| `run_count` | `integer` | 是 | 运行次数 |
 
 ### PermissionPreviewCommand
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `tool_use_id` | `string` | 是 |
-| `tool_name` | `string` | 是 |
-| `params` | `object` | 否 |
-| `session_id` | `string` | 否 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "permission.preview",
-      "default": "permission.preview",
-      "title": "类型",
-      "type": "string"
-    },
-    "tool_use_id": {
-      "title": "工具调用 ID",
-      "type": "string"
-    },
-    "tool_name": {
-      "title": "工具名称",
-      "type": "string"
-    },
-    "params": {
-      "additionalProperties": true,
-      "title": "参数",
-      "type": "object"
-    },
-    "session_id": {
-      "default": "",
-      "title": "会话 ID",
-      "type": "string"
-    }
-  },
-  "required": [
-    "tool_use_id",
-    "tool_name"
-  ],
-  "title": "PermissionPreviewCommand",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `permission.preview` | 否 | 类型 |
+| `tool_use_id` | `string` | 是 | 工具调用 ID |
+| `tool_name` | `string` | 是 | 工具名称 |
+| `params` | `object` | 否 | 参数 |
+| `session_id` | `string`（默认: ""） | 否 | 会话 ID |
 
 **示例：**
 
@@ -900,65 +353,16 @@
 
 ### PermissionPreviewResult
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `ok` | `boolean` | 否 |
-| `tool_use_id` | `string` | 否 |
-| `decision` | `string` | 否 |
-| `tier` | `string` | 否 |
-| `matched_rule` | `string` | 否 |
-| `reason` | `string` | 否 |
-| `preview_text` | `string` | 否 |
-| `safe` | `boolean` | 否 |
-
-```json
-{
-  "properties": {
-    "ok": {
-      "default": true,
-      "title": "Ok",
-      "type": "boolean"
-    },
-    "tool_use_id": {
-      "default": "",
-      "title": "工具调用 ID",
-      "type": "string"
-    },
-    "decision": {
-      "default": "",
-      "title": "决策结果",
-      "type": "string"
-    },
-    "tier": {
-      "default": "",
-      "title": "命中决策层级",
-      "type": "string"
-    },
-    "matched_rule": {
-      "default": "",
-      "title": "命中规则",
-      "type": "string"
-    },
-    "reason": {
-      "default": "",
-      "title": "原因说明",
-      "type": "string"
-    },
-    "preview_text": {
-      "default": "",
-      "title": "预览文本",
-      "type": "string"
-    },
-    "safe": {
-      "default": true,
-      "title": "是否安全",
-      "type": "boolean"
-    }
-  },
-  "title": "PermissionPreviewResult",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `ok` | `boolean`（默认: true） | 否 | Ok |
+| `tool_use_id` | `string`（默认: ""） | 否 | 工具调用 ID |
+| `decision` | `string`（默认: ""） | 否 | 决策结果 |
+| `tier` | `string`（默认: ""） | 否 | 命中决策层级 |
+| `matched_rule` | `string`（默认: ""） | 否 | 命中规则 |
+| `reason` | `string`（默认: ""） | 否 | 原因说明 |
+| `preview_text` | `string`（默认: ""） | 否 | 预览文本 |
+| `safe` | `boolean`（默认: true） | 否 | 是否安全 |
 
 **示例：**
 
@@ -985,33 +389,10 @@
 
 ### EventPushEnvelope
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `kind` | `string` | 否 |
-| `event` | `object` | 是 |
-
-```json
-{
-  "properties": {
-    "kind": {
-      "const": "event",
-      "default": "event",
-      "title": "信封类型",
-      "type": "string"
-    },
-    "event": {
-      "additionalProperties": true,
-      "title": "事件对象",
-      "type": "object"
-    }
-  },
-  "required": [
-    "event"
-  ],
-  "title": "EventPushEnvelope",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `kind` | `event` | 否 | 信封类型 |
+| `event` | `object` | 是 | 事件对象 |
 
 **示例：**
 
@@ -1033,38 +414,11 @@
 
 ### CoreStartedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `listen_addr` | `string` | 是 |
-| `version` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "core.started",
-      "default": "core.started",
-      "title": "类型",
-      "type": "string"
-    },
-    "listen_addr": {
-      "title": "监听地址",
-      "type": "string"
-    },
-    "version": {
-      "title": "版本",
-      "type": "string"
-    }
-  },
-  "required": [
-    "listen_addr",
-    "version"
-  ],
-  "title": "CoreStartedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `core.started` | 否 | 类型 |
+| `listen_addr` | `string` | 是 | 监听地址 |
+| `version` | `string` | 是 | 版本 |
 
 ## 运行事件（Run Events）
 
@@ -1072,44 +426,12 @@
 
 ### RunStartedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `goal` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "run.started",
-      "default": "run.started",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "goal": {
-      "title": "目标",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "goal",
-    "ts"
-  ],
-  "title": "RunStartedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `run.started` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `goal` | `string` | 是 | 目标 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1124,63 +446,14 @@
 
 ### RunFinishedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `status` | `string` | 是 |
-| `reason` | `string | null` | 否 |
-| `steps` | `integer` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "run.finished",
-      "default": "run.finished",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "status": {
-      "title": "状态",
-      "type": "string"
-    },
-    "reason": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "原因说明"
-    },
-    "steps": {
-      "title": "总步数",
-      "type": "integer"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "status",
-    "steps",
-    "ts"
-  ],
-  "title": "RunFinishedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `run.finished` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `status` | `string` | 是 | 状态 |
+| `reason` | `string | null` | 否 | 原因说明 |
+| `steps` | `integer` | 是 | 总步数 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1197,44 +470,12 @@
 
 ### StepStartedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `step` | `integer` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "step.started",
-      "default": "step.started",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "step": {
-      "title": "步号",
-      "type": "integer"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "step",
-    "ts"
-  ],
-  "title": "StepStartedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `step.started` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `step` | `integer` | 是 | 步号 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1249,44 +490,12 @@
 
 ### StepFinishedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `step` | `integer` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "step.finished",
-      "default": "step.finished",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "step": {
-      "title": "步号",
-      "type": "integer"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "step",
-    "ts"
-  ],
-  "title": "StepFinishedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `step.finished` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `step` | `integer` | 是 | 步号 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1301,57 +510,14 @@
 
 ### ToolCallStartedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `tool_use_id` | `string` | 是 |
-| `tool_name` | `string` | 是 |
-| `params` | `object` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "tool.call_started",
-      "default": "tool.call_started",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "tool_use_id": {
-      "title": "工具调用 ID",
-      "type": "string"
-    },
-    "tool_name": {
-      "title": "工具名称",
-      "type": "string"
-    },
-    "params": {
-      "additionalProperties": true,
-      "title": "参数",
-      "type": "object"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "tool_use_id",
-    "tool_name",
-    "params",
-    "ts"
-  ],
-  "title": "ToolCallStartedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `tool.call_started` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `tool_use_id` | `string` | 是 | 工具调用 ID |
+| `tool_name` | `string` | 是 | 工具名称 |
+| `params` | `object` | 是 | 参数 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1370,62 +536,15 @@
 
 ### ToolCallFinishedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `tool_use_id` | `string` | 是 |
-| `tool_name` | `string` | 是 |
-| `elapsed_ms` | `integer` | 是 |
-| `output` | `string` | 否 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "tool.call_finished",
-      "default": "tool.call_finished",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "tool_use_id": {
-      "title": "工具调用 ID",
-      "type": "string"
-    },
-    "tool_name": {
-      "title": "工具名称",
-      "type": "string"
-    },
-    "elapsed_ms": {
-      "title": "耗时（毫秒）",
-      "type": "integer"
-    },
-    "output": {
-      "default": "",
-      "title": "输出内容",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "tool_use_id",
-    "tool_name",
-    "elapsed_ms",
-    "ts"
-  ],
-  "title": "ToolCallFinishedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `tool.call_finished` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `tool_use_id` | `string` | 是 | 工具调用 ID |
+| `tool_name` | `string` | 是 | 工具名称 |
+| `elapsed_ms` | `integer` | 是 | 耗时（毫秒） |
+| `output` | `string`（默认: ""） | 否 | 输出内容 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1442,74 +561,17 @@
 
 ### ToolCallFailedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `tool_use_id` | `string` | 是 |
-| `tool_name` | `string` | 是 |
-| `error_class` | `string` | 是 |
-| `error_message` | `string` | 是 |
-| `elapsed_ms` | `integer` | 是 |
-| `attempt` | `integer` | 否 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "tool.call_failed",
-      "default": "tool.call_failed",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "tool_use_id": {
-      "title": "工具调用 ID",
-      "type": "string"
-    },
-    "tool_name": {
-      "title": "工具名称",
-      "type": "string"
-    },
-    "error_class": {
-      "title": "错误类别",
-      "type": "string"
-    },
-    "error_message": {
-      "title": "错误信息",
-      "type": "string"
-    },
-    "elapsed_ms": {
-      "title": "耗时（毫秒）",
-      "type": "integer"
-    },
-    "attempt": {
-      "default": 1,
-      "title": "尝试次数",
-      "type": "integer"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "tool_use_id",
-    "tool_name",
-    "error_class",
-    "error_message",
-    "elapsed_ms",
-    "ts"
-  ],
-  "title": "ToolCallFailedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `tool.call_failed` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `tool_use_id` | `string` | 是 | 工具调用 ID |
+| `tool_name` | `string` | 是 | 工具名称 |
+| `error_class` | `string` | 是 | 错误类别 |
+| `error_message` | `string` | 是 | 错误信息 |
+| `elapsed_ms` | `integer` | 是 | 耗时（毫秒） |
+| `attempt` | `integer`（默认: 1） | 否 | 尝试次数 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1529,50 +591,13 @@
 
 ### LlmModelSelectedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `model` | `string` | 是 |
-| `strategy` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "llm.model_selected",
-      "default": "llm.model_selected",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "model": {
-      "title": "模型",
-      "type": "string"
-    },
-    "strategy": {
-      "title": "选择策略",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "model",
-    "strategy",
-    "ts"
-  ],
-  "title": "LlmModelSelectedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `llm.model_selected` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `model` | `string` | 是 | 模型 |
+| `strategy` | `string` | 是 | 选择策略 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1588,44 +613,12 @@
 
 ### LlmTokenEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `token` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "llm.token",
-      "default": "llm.token",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "token": {
-      "title": "令牌",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "token",
-    "ts"
-  ],
-  "title": "LlmTokenEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `llm.token` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `token` | `string` | 是 | 令牌 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1640,68 +633,16 @@
 
 ### LlmUsageEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `input_tokens` | `integer` | 是 |
-| `output_tokens` | `integer` | 是 |
-| `cache_read_input_tokens` | `integer` | 是 |
-| `cache_creation_input_tokens` | `integer` | 是 |
-| `context_pct` | `number` | 否 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "llm.usage",
-      "default": "llm.usage",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "input_tokens": {
-      "title": "输入令牌数",
-      "type": "integer"
-    },
-    "output_tokens": {
-      "title": "输出令牌数",
-      "type": "integer"
-    },
-    "cache_read_input_tokens": {
-      "title": "缓存读取输入令牌数",
-      "type": "integer"
-    },
-    "cache_creation_input_tokens": {
-      "title": "缓存创建输入令牌数",
-      "type": "integer"
-    },
-    "context_pct": {
-      "default": 0.0,
-      "title": "上下文占用百分比",
-      "type": "number"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "input_tokens",
-    "output_tokens",
-    "cache_read_input_tokens",
-    "cache_creation_input_tokens",
-    "ts"
-  ],
-  "title": "LlmUsageEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `llm.usage` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `input_tokens` | `integer` | 是 | 输入令牌数 |
+| `output_tokens` | `integer` | 是 | 输出令牌数 |
+| `cache_read_input_tokens` | `integer` | 是 | 缓存读取输入令牌数 |
+| `cache_creation_input_tokens` | `integer` | 是 | 缓存创建输入令牌数 |
+| `context_pct` | `number`（默认: 0.0） | 否 | 上下文占用百分比 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1719,56 +660,14 @@
 
 ### LogLineEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `run_id` | `string` | 是 |
-| `level` | `string` | 是 |
-| `source` | `string` | 是 |
-| `message` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "log.line",
-      "default": "log.line",
-      "title": "类型",
-      "type": "string"
-    },
-    "run_id": {
-      "title": "运行 ID",
-      "type": "string"
-    },
-    "level": {
-      "title": "级别",
-      "type": "string"
-    },
-    "source": {
-      "title": "来源",
-      "type": "string"
-    },
-    "message": {
-      "title": "消息",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "run_id",
-    "level",
-    "source",
-    "message",
-    "ts"
-  ],
-  "title": "LogLineEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `log.line` | 否 | 类型 |
+| `run_id` | `string` | 是 | 运行 ID |
+| `level` | `string` | 是 | 级别 |
+| `source` | `string` | 是 | 来源 |
+| `message` | `string` | 是 | 消息 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1787,44 +686,12 @@
 
 ### SessionCreatedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `session_id` | `string` | 是 |
-| `mode` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.created",
-      "default": "session.created",
-      "title": "类型",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    },
-    "mode": {
-      "title": "会话模式",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id",
-    "mode",
-    "ts"
-  ],
-  "title": "SessionCreatedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.created` | 否 | 类型 |
+| `session_id` | `string` | 是 | 会话 ID |
+| `mode` | `string` | 是 | 会话模式 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1839,44 +706,12 @@
 
 ### SessionMessageReceivedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `session_id` | `string` | 是 |
-| `content` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.message_received",
-      "default": "session.message_received",
-      "title": "类型",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    },
-    "content": {
-      "title": "内容",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id",
-    "content",
-    "ts"
-  ],
-  "title": "SessionMessageReceivedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.message_received` | 否 | 类型 |
+| `session_id` | `string` | 是 | 会话 ID |
+| `content` | `string` | 是 | 内容 |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1891,44 +726,12 @@
 
 ### SessionWaitingForInputEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `session_id` | `string` | 是 |
-| `last_run_id` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.waiting_for_input",
-      "default": "session.waiting_for_input",
-      "title": "类型",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    },
-    "last_run_id": {
-      "title": "最近一次运行 ID",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id",
-    "last_run_id",
-    "ts"
-  ],
-  "title": "SessionWaitingForInputEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.waiting_for_input` | 否 | 类型 |
+| `session_id` | `string` | 是 | 会话 ID |
+| `last_run_id` | `string` | 是 | 最近一次运行 ID |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1943,38 +746,11 @@
 
 ### SessionResumedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `session_id` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.resumed",
-      "default": "session.resumed",
-      "title": "类型",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id",
-    "ts"
-  ],
-  "title": "SessionResumedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.resumed` | 否 | 类型 |
+| `session_id` | `string` | 是 | 会话 ID |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 
@@ -1988,38 +764,11 @@
 
 ### SessionClosedEvent
 
-| 字段 | 类型 | 必填 |
-|---|---|---|
-| `type` | `string` | 否 |
-| `session_id` | `string` | 是 |
-| `ts` | `string` | 是 |
-
-```json
-{
-  "properties": {
-    "type": {
-      "const": "session.closed",
-      "default": "session.closed",
-      "title": "类型",
-      "type": "string"
-    },
-    "session_id": {
-      "title": "会话 ID",
-      "type": "string"
-    },
-    "ts": {
-      "title": "时间戳",
-      "type": "string"
-    }
-  },
-  "required": [
-    "session_id",
-    "ts"
-  ],
-  "title": "SessionClosedEvent",
-  "type": "object"
-}
-```
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `type` | `session.closed` | 否 | 类型 |
+| `session_id` | `string` | 是 | 会话 ID |
+| `ts` | `string` | 是 | 时间戳 |
 
 **示例：**
 

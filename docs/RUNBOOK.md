@@ -5,10 +5,13 @@
 ### 启动守护进程
 
 ```bash
-uv run desk-core
+uv run desk-core            # 前台运行（推荐开发/调试）
+uv run desk core start      # 后台静默运行，desk core stop 停止
 ```
 
-默认监听 `127.0.0.1:9986`，按 `Ctrl+C` 优雅退出。
+默认监听 `127.0.0.1:9986`，按 `Ctrl+C` 优雅退出（前台模式）。
+启动后连接信息（令牌 / 端口 / 证书指纹）写入 `~/.desk/run/daemon.json`，
+客户端据此自动认证连接；令牌认证与 TLS 默认开启（见 [COMMUNICATION_SECURITY.md](COMMUNICATION_SECURITY.md)）。
 
 ### 验证连通
 
@@ -18,6 +21,12 @@ uv run desk ping
 ```
 
 ### 停止守护进程
+
+```bash
+uv run desk core stop        # 推荐：读 run 文件取 PID，优雅停止并清理 run 文件
+```
+
+兜底（手动杀进程）：
 
 ```bash
 kill $(pgrep -f desk-core)
@@ -62,6 +71,7 @@ cp .env.example .env
 | `DESK_LOG_LEVEL` | `INFO` | 日志级别（DEBUG / INFO / WARNING / ERROR） |
 | `DESK_LOG_FILE` | `~/.desk/logs/core.log` | 日志文件路径（留空则仅输出 stderr） |
 | `DESK_LOG_FORMAT` | `text` | 日志格式（`text` 或 `json`） |
+| `DESK_BASH_PATH` | 空 | 显式指定 bash.exe 路径（dry-run 语法检查用，优先级最高） |
 
 ---
 
@@ -78,19 +88,11 @@ uv run python scripts/gen_protocol_doc.py --check  # 校验协议文档与代码
 
 ---
 
-## 个人桌面管家智能体（DeskAgent）
+## 个人桌面管家智能体（规划中）
 
-DeskAgent 可作为**个人桌面管家智能体**使用：用自然语言一句话指挥电脑完成监控、清理、卸载、进程管理等任务。
-
-> 以下管家相关路径为**规划中**内容，随系统管理工具集落地后生效：
-
-| 路径 | 说明 |
-|------|------|
-| `~/.desk/clean_whitelist.toml` | 清理/卸载的白名单保护配置 |
-| `~/.desk/audit/operations.jsonl` | 破坏性操作（清理/卸载/结束进程）审计日志 |
-| `~/.desk/config.toml` 的 `[monitor]` 段 | 7×24 监控采集间隔与告警阈值 |
-
-**运维要点**：清理、卸载、结束进程均为不可逆的破坏性操作，默认 dry-run 预览 + 权限审批 + 白名单保护，生产使用务必先在测试机/虚拟机验证。
+DeskAgent 定位为**个人桌面管家智能体**：用自然语言一句话指挥电脑完成监控、清理、卸载、进程管理等任务。
+清理 / 卸载 / 结束进程均为不可逆的破坏性操作，将默认 dry-run 预览 + 权限审批 + 白名单保护。
+相关配置路径（`~/.desk/clean_whitelist.toml`、`~/.desk/audit/operations.jsonl`、`[monitor]` 段）为**规划中**内容，随系统管理工具集落地后生效。
 
 ---
 
@@ -128,8 +130,8 @@ DESK_BASH_PATH="D:\Programs\Git\usr\bin\bash.exe" uv run desk-core
 
 | 报错 | 原因 | 处理 |
 |------|------|------|
-| `already running  (127.0.0.1:9986)` | 已有守护进程在运行 | `kill $(pgrep -f desk-core)` |
-| `error: core not running (127.0.0.1:9986)` | 未启动守护进程 | `uv run desk-core` |
+| `already running  (127.0.0.1:9986)` | 已有守护进程在运行 | `uv run desk core stop`（推荐）或 `kill $(pgrep -f desk-core)` |
+| `error: core not running (127.0.0.1:9986)` | 未启动守护进程 | `uv run desk core start`（后台）或 `uv run desk-core`（前台） |
 | `Address already in use` | 端口被其他进程占用 | `DESK_PORT=9987 uv run desk-core` |
 | `Config error: DESK_PORT must be an integer` | `.env` 或环境变量中端口值非整数 | 检查 `DESK_PORT` 的值 |
 | 预览提示「未找到 bash，跳过语法检查」 | daemon 环境 PATH 无 bash，且 git 不在 PATH（自动推导失效） | 见上文「权限 dry-run 预览的 bash 依赖」：确认 `git` 在 daemon 的 PATH 中（可自动推导非默认安装位置），或设置 `DESK_BASH_PATH` / 加入系统 PATH 后重启 daemon |

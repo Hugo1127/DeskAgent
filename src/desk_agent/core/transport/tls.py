@@ -5,7 +5,7 @@
 - 证书 SHA-256 指纹写入 run 文件，客户端以该证书为唯一信任锚校验；
 - 任何其他证书（MITM 攻击者的）都会在校验阶段被拒绝。
 
-见 docs/COMMUNICATION_SECURITY.md 5.8。
+见 docs/COMMUNICATION_SECURITY.md。
 """
 from __future__ import annotations
 

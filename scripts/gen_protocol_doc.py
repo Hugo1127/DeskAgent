@@ -115,34 +115,52 @@ _FIELD_TITLES_ZH: dict[str, str] = {
 }
 
 
-# 从 pydantic 模型生成一个带字段表、JSON Schema 和可选示例的 Markdown 小节（中文版）
+# 从 pydantic 模型生成一个带字段表（类型/必填/说明）和可选示例的 Markdown 小节（中文版）。
+# 字段表已包含 const / 枚举 / 默认值信息，不再输出重复的 JSON Schema 块，以精简文档。
 def _model_section(name: str, model: type, example: dict | None = None) -> str:  # type: ignore[type-arg]
     schema = model.model_json_schema()  # type: ignore[attr-defined]
     props = schema.get("properties", {})
     required: set[str] = set(schema.get("required", []))
 
-    # 把 pydantic 自动生成的英文 title 翻译成中文
-    for field_name, field_info in props.items():
-        if isinstance(field_info, dict) and field_name in _FIELD_TITLES_ZH:
-            field_info["title"] = _FIELD_TITLES_ZH[field_name]
-
     table = ""
     if props:
-        table = "\n| 字段 | 类型 | 必填 |\n|---|---|---|\n"
+        table = "\n| 字段 | 类型 | 必填 | 说明 |\n|---|---|---|---|\n"
         for field_name, field_info in props.items():
-            ftype = field_info.get("type", "object")
-            if "anyOf" in field_info:
-                ftype = " | ".join(t.get("type", "?") for t in field_info["anyOf"])
+            if isinstance(field_info, dict):
+                if "const" in field_info:
+                    ftype = f"`{field_info['const']}`"
+                else:
+                    raw_type = field_info.get("type", "object")
+                    if "anyOf" in field_info:
+                        raw_type = " | ".join(
+                            t.get("type", "?") for t in field_info["anyOf"]
+                        )
+                    ftype = f"`{raw_type}`"
+                extra: list[str] = []
+                enum = field_info.get("enum")
+                if enum:
+                    extra.append("枚举: " + " / ".join(str(e) for e in enum))
+                default = field_info.get("default")
+                if "const" not in field_info and default is not None:
+                    extra.append(
+                        "默认: " + json.dumps(default, ensure_ascii=False)
+                    )
+                if extra:
+                    ftype += "（" + "；".join(extra) + "）"
+                desc = _FIELD_TITLES_ZH.get(
+                    field_name, field_info.get("title", "")
+                )
+            else:
+                ftype = "`?`"
+                desc = ""
             req = "是" if field_name in required else "否"
-            table += f"| `{field_name}` | `{ftype}` | {req} |\n"
-
-    schema_block = f"\n```json\n{json.dumps(schema, indent=2, ensure_ascii=False)}\n```\n"
+            table += f"| `{field_name}` | {ftype} | {req} | {desc} |\n"
 
     example_block = ""
     if example:
         example_block = f"\n**示例：**\n\n```json\n{json.dumps(example, indent=2, ensure_ascii=False)}\n```\n"
 
-    return f"### {name}\n{table}{schema_block}{example_block}"
+    return f"### {name}\n{table}{example_block}"
 
 
 # 生成完整的 WIRE_PROTOCOL.md 文档字符串

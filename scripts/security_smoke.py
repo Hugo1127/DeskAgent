@@ -18,7 +18,7 @@
 退出码：0 = 全部通过；1 = 存在失败；2 = daemon 未运行 / 环境不满足。
 
 注：本脚本只验证「网络传输 + 协议层」防御；本机同用户恶意进程（可读 run 文件令牌）
-不在本脚本覆盖范围内（见 docs/COMMUNICATION_SECURITY.md 威胁模型）。
+不在本脚本覆盖范围内（见 docs/COMMUNICATION_SECURITY.md）。
 """
 from __future__ import annotations
 

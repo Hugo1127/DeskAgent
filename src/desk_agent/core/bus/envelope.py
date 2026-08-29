@@ -10,7 +10,7 @@ class JsonRpcRequest(BaseModel):
     id: str
     method: str
     params: dict[str, Any] = Field(default_factory=dict)
-    # 防重放：每连接单调递增序号 + 客户端时间戳（epoch 秒），见 docs/COMMUNICATION_SECURITY.md 5.8
+    # 防重放：每连接单调递增序号 + 客户端时间戳（epoch 秒），见 docs/COMMUNICATION_SECURITY.md
     seq: int | None = Field(default=None, strict=True)
     ts: int | None = Field(default=None, strict=True)
 

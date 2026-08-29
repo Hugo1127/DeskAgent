@@ -17,6 +17,10 @@ _DEFAULT_CONFIG_PATH = "~/.desk/config.toml"
 _DEFAULT_MAX_STEPS = 20
 _DEFAULT_MODEL = "claude-sonnet-4-6"
 _DEFAULT_TRACE_FILE = "~/.desk/traces/daemon.jsonl"
+_DEFAULT_WEB_HOST = "127.0.0.1"
+_DEFAULT_WEB_PORT = 9987
+_DEFAULT_WEB_TOKEN = ""  # 空 = 免登录（仅限绑回环场景）
+_DEFAULT_WEB_LOG_FILE = "~/.desk/logs/web.log"
 
 
 @dataclass
@@ -74,6 +78,15 @@ class McpConfig:
 
 
 @dataclass
+class WebConfig:
+    # desk-web 监听地址 / 端口 / 登录令牌 / 日志文件（默认值仅兜底，可被配置覆盖）
+    host: str = _DEFAULT_WEB_HOST
+    port: int = _DEFAULT_WEB_PORT
+    token: str = _DEFAULT_WEB_TOKEN
+    log_file: str = _DEFAULT_WEB_LOG_FILE
+
+
+@dataclass
 class DeskConfig:
     host: str = _DEFAULT_HOST
     port: int = _DEFAULT_PORT
@@ -88,6 +101,7 @@ class DeskConfig:
     permission: PermissionConfig = field(default_factory=PermissionConfig)
     compaction: CompactionConfig = field(default_factory=CompactionConfig)
     mcp: McpConfig = field(default_factory=McpConfig)
+    web: WebConfig = field(default_factory=WebConfig)
 
 
 # 构建并返回运行时配置：默认值 → 全局 TOML → 项目本地 TOML → .env → 系统环境变量（后者优先级最高）
@@ -122,7 +136,10 @@ def get_config() -> DeskConfig:
 
 # 将已解析的 TOML 根表写入 config；未知小节或类型错误时退出进程
 def _apply_toml(config: DeskConfig, data: dict[str, Any]) -> None:
-    known_top = {"core", "logging", "agent", "llm", "trace", "permission", "compaction", "mcp"}
+    known_top = {
+        "core", "logging", "agent", "llm", "trace",
+        "permission", "compaction", "mcp", "web",
+    }
     unknown = set(data.keys()) - known_top
     if unknown:
         raise SystemExit(f"Unknown top-level config keys: {', '.join(sorted(unknown))}")
@@ -312,6 +329,34 @@ def _apply_toml(config: DeskConfig, data: dict[str, Any]) -> None:
                 s.port = val
             config.mcp.servers.append(s)
 
+    if "web" in data:
+        web = data["web"]
+        if not isinstance(web, dict):
+            raise SystemExit("Config error: [web] must be a table")
+        unknown_web: set[str] = set(web.keys()) - {"host", "port", "token", "log_file"}
+        if unknown_web:
+            raise SystemExit(f"Unknown [web] keys: {', '.join(sorted(unknown_web))}")
+        if "host" in web:
+            val = web["host"]
+            if not isinstance(val, str):
+                raise SystemExit("Config error: web.host must be a string")
+            config.web.host = val
+        if "port" in web:
+            val = web["port"]
+            if not isinstance(val, int):
+                raise SystemExit("Config error: web.port must be an integer")
+            config.web.port = val
+        if "token" in web:
+            val = web["token"]
+            if not isinstance(val, str):
+                raise SystemExit("Config error: web.token must be a string")
+            config.web.token = val
+        if "log_file" in web:
+            val = web["log_file"]
+            if not isinstance(val, str):
+                raise SystemExit("Config error: web.log_file must be a string")
+            config.web.log_file = val
+
 
 # 用 DESK_* 环境变量覆盖 config 中对应字段（若变量已设置）
 def _apply_env(config: DeskConfig) -> None:
@@ -437,3 +482,25 @@ def _apply_env(config: DeskConfig) -> None:
                 "Config error: DESK_COMPACT_TOOL_KEEP must be an integer,"
                 f" got: {compact_tool_keep!r}"
             )
+
+    # desk-web 配置（DESK_WEB_HOST / DESK_WEB_PORT / DESK_WEB_TOKEN / DESK_WEB_LOG_FILE）
+    web_host = os.environ.get("DESK_WEB_HOST")
+    if web_host is not None:
+        config.web.host = web_host
+
+    web_port_str = os.environ.get("DESK_WEB_PORT")
+    if web_port_str is not None:
+        try:
+            config.web.port = int(web_port_str)
+        except ValueError:
+            raise SystemExit(
+                f"Config error: DESK_WEB_PORT must be an integer, got: {web_port_str!r}"
+            )
+
+    web_token = os.environ.get("DESK_WEB_TOKEN")
+    if web_token is not None:
+        config.web.token = web_token
+
+    web_log_file = os.environ.get("DESK_WEB_LOG_FILE")
+    if web_log_file is not None:
+        config.web.log_file = web_log_file

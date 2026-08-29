@@ -19,12 +19,10 @@ from desk_agent.core.config import get_config
 from desk_agent.web.bridge import CoreBridge
 from desk_agent.web.server import WebServerConfig, create_app
 
-_DEFAULT_WEB_LOG = "~/.desk/logs/web.log"
-
 
 # desk-web 文件日志初始化：不写 stderr（保持前台输出干净），只写滚动文件
-def _setup_logging(level: str) -> None:
-    log_path = Path(os.environ.get("DESK_WEB_LOG_FILE", _DEFAULT_WEB_LOG)).expanduser()
+def _setup_logging(level: str, log_file: str) -> None:
+    log_path = Path(log_file).expanduser()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     handler = logging.handlers.RotatingFileHandler(
         log_path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
@@ -41,41 +39,47 @@ def _setup_logging(level: str) -> None:
     root.addHandler(handler)
 
 
+# 计算可访问的 Web UI URL；监听 0.0.0.0 / :: 时回退为回环地址（浏览器无法访问 0.0.0.0）
+def _display_url(host: str, port: int) -> str:
+    if host in ("0.0.0.0", "::"):
+        host = "127.0.0.1"
+    return f"http://{host}:{port}/"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="desk-web", description="DeskAgent 本地 Web 界面"
     )
-    parser.add_argument("--host", default=None, help="Web 服务监听地址（默认 127.0.0.1）")
-    parser.add_argument("--port", type=int, default=None, help="Web 服务端口（默认 9987）")
+    parser.add_argument(
+        "--host", default=None, help="Web 服务监听地址（覆盖配置 web.host，兜底 127.0.0.1）"
+    )
+    parser.add_argument(
+        "--port", type=int, default=None, help="Web 服务端口（覆盖配置 web.port，兜底 9987）"
+    )
     parser.add_argument("--open", action="store_true", help="启动后自动打开浏览器")
     parser.add_argument("--log-level", default=None, help="日志级别（DEBUG/INFO/WARNING/ERROR）")
     args = parser.parse_args()
 
     config = get_config()
 
-    host = args.host if args.host is not None else os.environ.get("DESK_WEB_HOST", "127.0.0.1")
-    if args.port is not None:
-        port = args.port
-    else:
-        port_str = os.environ.get("DESK_WEB_PORT", "9987")
-        try:
-            port = int(port_str)
-        except ValueError:
-            raise SystemExit(
-                f"Config error: DESK_WEB_PORT must be an integer, got: {port_str!r}"
-            )
-    token = os.environ.get("DESK_WEB_TOKEN", "")
+    # 命令行参数 > 分层配置（TOML / .env / 环境变量）> 内建默认值
+    host = args.host if args.host is not None else config.web.host
+    port = args.port if args.port is not None else config.web.port
+    token = config.web.token
     log_level = args.log_level or os.environ.get("DESK_LOG_LEVEL", config.logging.level)
 
-    _setup_logging(log_level)
+    _setup_logging(log_level, config.web.log_file)
 
     web_config = WebServerConfig(host=host, port=port, token=token)
     bridge = CoreBridge(config)
     app = create_app(config, web_config, bridge)
 
+    # 无论是否 --open，都在终端打印 URL，方便关掉浏览器后随时重新打开
+    url = _display_url(host, port)
+    print(f"DeskAgent Web UI: {url}", flush=True)
+
     if args.open:
-        # --open 仅同机有效：无论监听地址如何，浏览器都指向回环地址
-        url = f"http://127.0.0.1:{port}/"
+        # --open 仅同机有效：自动打开默认浏览器
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
     # log_config=None 复用上方文件日志（避免 uvicorn 重新配置 logging 打到 stderr）

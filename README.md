@@ -120,6 +120,12 @@ tool_result_keep = 4000
 name = "example"
 transport = "stdio"
 command = "/path/to/mcp-server"
+
+[web]
+host = "127.0.0.1"
+port = 9987            # desk-web 端口（默认 9987，可用 DESK_WEB_PORT 或此处覆盖）
+# token = ""           # 非空则启用登录认证（远程访问必设）
+# log_file = "~/.desk/logs/web.log"
 ```
 
 ## 内置工具与权限

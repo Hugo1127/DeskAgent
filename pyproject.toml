@@ -18,13 +18,16 @@ dependencies = [
     "httpx[socks]>=0.28.1",
     "psutil>=5.9",         # 系统监控（CPU / 内存 / 磁盘 / 网络 / 进程 / 电池）
     "cryptography>=42",
+    "fastapi>=0.110",          # desk-web 后端（REST + WebSocket 桥接）
+    "uvicorn[standard]>=0.29", # desk-web ASGI 服务器
 ]
 
-# 安装后可在 PATH 中执行的入口：`desk` / `desk-core` / `desk-tui`
+# 安装后可在 PATH 中执行的入口：`desk` / `desk-core` / `desk-tui` / `desk-web`
 [project.scripts]
 desk = "desk_agent.cli.main:main"
 desk-core = "desk_agent.core.app:run"
 desk-tui = "desk_agent.tui.__main__:main"
+desk-web = "desk_agent.web.__main__:main"
 
 # ---- Hatch：打 wheel 时从 src 布局收录包 ----
 [tool.hatch.build.targets.wheel]

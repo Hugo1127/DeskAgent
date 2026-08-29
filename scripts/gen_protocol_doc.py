@@ -22,8 +22,11 @@ from desk_agent.core.bus.commands import (
     SessionCreateResult,
     SessionGetHistoryCommand,
     SessionGetHistoryResult,
+    SessionListCommand,
+    SessionListResult,
     SessionSendMessageCommand,
     SessionSendMessageResult,
+    SessionSummary,
 )
 from desk_agent.core.bus.envelope import EventPushEnvelope
 from desk_agent.core.bus.events import (
@@ -53,6 +56,11 @@ _OUTPUT_PATH = Path(__file__).parent.parent / "docs" / "WIRE_PROTOCOL.md"
 _FIELD_TITLES_ZH: dict[str, str] = {
     "type": "类型",
     "client": "客户端标识",
+    "id": "会话 ID",
+    "sessions": "会话摘要列表",
+    "run_count": "运行次数",
+    "created_at": "创建时间",
+    "updated_at": "更新时间",
     "server_version": "服务端版本",
     "uptime_ms": "运行时长（毫秒）",
     "received_at": "接收时间",
@@ -269,6 +277,12 @@ def generate() -> str:
         _model_section("SessionCloseCommand", SessionCloseCommand),
         "\n",
         _model_section("SessionCloseResult", SessionCloseResult),
+        "\n",
+        _model_section("SessionListCommand", SessionListCommand),
+        "\n",
+        _model_section("SessionListResult", SessionListResult),
+        "\n",
+        _model_section("SessionSummary", SessionSummary),
         "\n## 服务端推送（Server Push）\n\n",
         "守护进程通过同一 TCP 连接向已订阅的客户端推送事件。\n\n",
         _model_section("EventPushEnvelope", EventPushEnvelope, event_push_example),

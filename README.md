@@ -15,28 +15,29 @@ DeskAgent 是一个**本地 AI Agent 运行时**（mini 版 Claude Code）：以
 - **子 Agent + MCP**：`spawn_agent` 前台/后台编排、事件桥接；MCP 客户端支持 stdio / TCP 接入外部工具
 - **统一系统查询**：内置 `system_query` 工具，一个工具多类别（monitor 系统监控 / port 端口占用 / software 已安装软件），psutil + 注册表只读采集，零审批打扰
 - **三层 Trace + Textual TUI**：IPC / Event / LLM 全链路落盘可回放；TUI 流式渲染、内联审批、Skill 补全
+- **Web 界面（desk-web）**：本地优先的 Web UI（FastAPI 桥接 + vanilla JS 零构建 SPA），聊天 / 四级审批 / 会话管理 / 运行回放 / 仪表盘，与 CLI / TUI 同级
 
 ## 架构
 
 ```
-┌──────────────┐      ┌──────────────┐
-│   desk CLI   │      │   desk-tui   │
-│   (客户端)    │      │   (客户端)    │
-└──────┬───────┘      └──────┬───────┘
-       │                     │
-       │   JSON-RPC 2.0 over NDJSON TCP
-       │   （默认 127.0.0.1:9986）
-       ▼                     ▼
-┌──────────────────────────────────────┐
-│            desk-core 守护进程          │
-│  ┌────────────────────────────────┐  │
-│  │ AgentRunner → AgentLoop        │  │
-│  │ （ReAct：plan → act → observe） │  │
-│  │ ToolRegistry · PermissionMgr   │  │
-│  │ EventBus · Session · Compactor │  │
-│  │ Skills · Subagent · MCP        │  │
-│  └────────────────────────────────┘  │
-└──────────────────────────────────────┘
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│   desk CLI   │  │   desk-tui   │  │   desk-web   │
+│   (客户端)    │  │   (客户端)    │  │  (Web 界面)   │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+       │                 │                 │
+       │   JSON-RPC 2.0 over NDJSON TCP    │  HTTP/REST + WebSocket
+       │   （默认 127.0.0.1:9986）          │  （默认 127.0.0.1:9987）
+       ▼                 ▼                 ▼
+┌──────────────────────────────────────────────────────┐
+│                desk-core 守护进程                      │
+│  ┌────────────────────────────────────────────────┐  │
+│  │ AgentRunner → AgentLoop                        │  │
+│  │ （ReAct：plan → act → observe）                 │  │
+│  │ ToolRegistry · PermissionMgr                   │  │
+│  │ EventBus · Session · Compactor                 │  │
+│  │ Skills · Subagent · MCP                        │  │
+│  └────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────┘
 ```
 
 ## 快速开始
@@ -51,6 +52,7 @@ uv run desk ping                          # 4. 验证连通
 uv run desk run --goal "总结 README.md 的主要章节"  # 5. 单次任务
 uv run desk chat                          # 6. 多轮对话
 uv run desk-tui                           # 7. 终端 UI
+uv run desk-web --open                    # 8. Web 界面（自动开浏览器 → http://127.0.0.1:9987）
 ```
 
 > **前台运行（推荐开发/调试）**：`uv run desk-core` 直接在前台启动守护进程，日志实时打到
@@ -68,6 +70,7 @@ uv run desk-tui                           # 7. 终端 UI
 | `desk chat` | 多轮会话，权限审批用 `y/a/n/d` 响应 |
 | `desk trace [run_id]` | 查看 trace（`--layer` / `--direction` / `--raw` / `--follow`） |
 | `desk-tui [--replay <run_id>]` | Textual 终端 UI（可回放历史 run） |
+| `desk-web [--host --port --open]` | Web 界面（`--open` 自动开浏览器） |
 
 ## 配置
 
@@ -88,6 +91,9 @@ uv run desk-tui                           # 7. 终端 UI
 | `DESK_PERMISSION_TIMEOUT_S` | `60` | 权限审批超时秒数（0 不超时） |
 | `DESK_COMPACT_THRESHOLD` | `0.0` | 自动压缩水位（0 禁用，推荐手动 `/compact`） |
 | `DESK_COMPACT_TOOL_LIMIT` / `DESK_COMPACT_TOOL_KEEP` | `8000` / `4000` | tool_result 截断阈值 / 保留前缀 |
+| `DESK_WEB_HOST` / `DESK_WEB_PORT` | `127.0.0.1` / `9987` | Web 界面监听地址 / 端口（远程访问设 `0.0.0.0`） |
+| `DESK_WEB_TOKEN` | 空 | Web 登录令牌（配置后启用登录认证，远程访问必设） |
+| `DESK_WEB_LOG_FILE` | `~/.desk/logs/web.log` | desk-web 日志文件路径 |
 
 ### 配置文件示例（`~/.desk/config.toml`）
 
@@ -163,7 +169,10 @@ src/desk_agent/
 │   ├── skills/ · subagent/ · agents/   # Skill 加载 / 子 Agent / 角色档案（TOML）
 │   ├── mcp/ · trace/ · task/ · memory/ # MCP 客户端 / trace / 子任务 / 上下文加载
 │   └── config.py           # 分层配置（TOML / .env / 环境变量）
-└── tui/                    # Textual 终端 UI
+├── tui/                    # Textual 终端 UI
+└── web/                    # Web 界面（FastAPI 桥接 + vanilla JS SPA）
+    ├── bridge.py / server.py / __main__.py   # 桥接客户端 / REST+WS 应用 / 入口
+    └── static/             # 无构建前端（index.html + ES Modules + 深色主题）
 ```
 
 ## 开发

@@ -683,6 +683,155 @@
 }
 ```
 
+### SessionListCommand
+
+| 字段 | 类型 | 必填 |
+|---|---|---|
+| `type` | `string` | 否 |
+
+```json
+{
+  "properties": {
+    "type": {
+      "const": "session.list",
+      "default": "session.list",
+      "title": "类型",
+      "type": "string"
+    }
+  },
+  "title": "SessionListCommand",
+  "type": "object"
+}
+```
+
+### SessionListResult
+
+| 字段 | 类型 | 必填 |
+|---|---|---|
+| `sessions` | `array` | 是 |
+
+```json
+{
+  "$defs": {
+    "SessionSummary": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "title": "Updated At",
+          "type": "string"
+        },
+        "run_count": {
+          "title": "Run Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "mode",
+        "title",
+        "status",
+        "created_at",
+        "updated_at",
+        "run_count"
+      ],
+      "title": "SessionSummary",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "sessions": {
+      "items": {
+        "$ref": "#/$defs/SessionSummary"
+      },
+      "title": "会话摘要列表",
+      "type": "array"
+    }
+  },
+  "required": [
+    "sessions"
+  ],
+  "title": "SessionListResult",
+  "type": "object"
+}
+```
+
+### SessionSummary
+
+| 字段 | 类型 | 必填 |
+|---|---|---|
+| `id` | `string` | 是 |
+| `mode` | `string` | 是 |
+| `title` | `string` | 是 |
+| `status` | `string` | 是 |
+| `created_at` | `string` | 是 |
+| `updated_at` | `string` | 是 |
+| `run_count` | `integer` | 是 |
+
+```json
+{
+  "properties": {
+    "id": {
+      "title": "会话 ID",
+      "type": "string"
+    },
+    "mode": {
+      "title": "会话模式",
+      "type": "string"
+    },
+    "title": {
+      "title": "标题",
+      "type": "string"
+    },
+    "status": {
+      "title": "状态",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "创建时间",
+      "type": "string"
+    },
+    "updated_at": {
+      "title": "更新时间",
+      "type": "string"
+    },
+    "run_count": {
+      "title": "运行次数",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "id",
+    "mode",
+    "title",
+    "status",
+    "created_at",
+    "updated_at",
+    "run_count"
+  ],
+  "title": "SessionSummary",
+  "type": "object"
+}
+```
+
 ## 服务端推送（Server Push）
 
 守护进程通过同一 TCP 连接向已订阅的客户端推送事件。

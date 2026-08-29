@@ -33,8 +33,11 @@ from desk_agent.core.bus.commands import (
     SessionCreateResult,
     SessionGetHistoryCommand,
     SessionGetHistoryResult,
+    SessionListCommand,
+    SessionListResult,
     SessionSendMessageCommand,
     SessionSendMessageResult,
+    SessionSummary,
 )
 from desk_agent.core.bus.envelope import EventPushEnvelope
 from desk_agent.core.config import DeskConfig, get_config
@@ -148,6 +151,24 @@ class CoreApp:
         cmd = SessionGetHistoryCommand.model_validate(params)
         messages = await self._sessions.get_history(cmd.session_id)
         return SessionGetHistoryResult(messages=messages)
+
+    # 返回磁盘上所有会话摘要（按 updated_at 倒序），供 Web 仪表盘/侧栏展示
+    async def _session_list_handler(self, params: dict[str, Any]) -> SessionListResult:
+        assert self._sessions is not None
+        SessionListCommand.model_validate(params)
+        summaries = [
+            SessionSummary(
+                id=s.id,
+                mode=s.mode,
+                title=s.title,
+                status=s.status,
+                created_at=s.created_at,
+                updated_at=s.updated_at,
+                run_count=len(s.run_ids),
+            )
+            for s in self._sessions.list_sessions()
+        ]
+        return SessionListResult(sessions=summaries)
 
     # 接收客户端权限审批响应，resolve 对应挂起的 Future
     async def _permission_respond_handler(self, params: dict[str, Any]) -> PermissionRespondResult:
@@ -303,6 +324,7 @@ class CoreApp:
         server.register("session.create", self._session_create_handler)
         server.register("session.send_message", self._session_send_handler)
         server.register("session.get_history", self._session_history_handler)
+        server.register("session.list", self._session_list_handler)
         server.register("session.close", self._session_close_handler)
         server.register("permission.respond", self._permission_respond_handler)
         server.register("session.compact", self._session_compact_handler)
@@ -326,7 +348,7 @@ class CoreApp:
 
         loop = asyncio.get_running_loop()
         shutdown = asyncio.Event()
-        # 注册退出信号：Windows 的 loop 不支持 add_signal_handler，用 signal.signal + call_soon_threadsafe 替代
+        # 注册退出信号：Windows 的 loop 不支持 add_signal_handler，用 signal.signal + call_soon_threadsafe 替代  # noqa: E501
         if sys.platform == "win32":
             signal.signal(signal.SIGINT, lambda *_: loop.call_soon_threadsafe(shutdown.set))
             signal.signal(signal.SIGTERM, lambda *_: loop.call_soon_threadsafe(shutdown.set))

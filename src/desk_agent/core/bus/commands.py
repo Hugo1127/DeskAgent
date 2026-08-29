@@ -113,6 +113,24 @@ class SessionCompactResult(BaseModel):
     saved_tokens: int
 
 
+class SessionListCommand(BaseModel):
+    type: Literal["session.list"] = "session.list"
+
+
+class SessionSummary(BaseModel):
+    id: str
+    mode: str
+    title: str
+    status: str
+    created_at: str
+    updated_at: str
+    run_count: int
+
+
+class SessionListResult(BaseModel):
+    sessions: list[SessionSummary]
+
+
 # 根据 type 字段决定命令类型的判别联合
 Command = Annotated[
     PingCommand
@@ -123,6 +141,7 @@ Command = Annotated[
     | SessionGetHistoryCommand
     | SessionCloseCommand
     | PermissionRespondCommand
-    | SessionCompactCommand,
+    | SessionCompactCommand
+    | SessionListCommand,
     Discriminator("type"),
 ]

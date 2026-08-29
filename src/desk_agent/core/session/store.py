@@ -46,6 +46,22 @@ class SessionStore:
         data = json.loads((self.session_dir(sid) / "meta.json").read_text(encoding="utf-8"))
         return Session.from_dict(data)
 
+    # 扫描 sessions 根目录下所有 meta.json，按 updated_at 倒序返回 Session 列表
+    # （损坏 / 缺失 meta.json 的目录跳过，保证单个坏会话不影响整体列表）
+    def list_sessions(self) -> list[Session]:
+        sessions: list[Session] = []
+        if not self._root.exists():
+            return sessions
+        for meta_path in self._root.glob("*/meta.json"):
+            sid = meta_path.parent.name
+            try:
+                sessions.append(self.read_meta(sid))
+            except (OSError, ValueError, KeyError, TypeError):
+                logger.warning("skip broken meta.json sid=%s", sid)
+                continue
+        sessions.sort(key=lambda s: s.updated_at, reverse=True)
+        return sessions
+
     # 追加一条 Anthropic API 消息到 thread.jsonl
     def append_message(
         self,

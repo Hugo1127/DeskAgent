@@ -189,9 +189,19 @@ class SessionManager:
         self._get_session(sid)
         return self._store.read_messages(sid)
 
-    # 从内存索引取 session，不存在时抛 JSON-RPC 结构化错误
+    # 扫描磁盘返回所有历史会话摘要（按 updated_at 倒序），供 Web 仪表盘/侧栏展示
+    def list_sessions(self) -> list[Session]:
+        return self._store.list_sessions()
+
+    # 从内存索引取 session；不在内存时按磁盘 meta.json 加载（daemon 重启后历史会话仍可读）
     def _get_session(self, sid: str) -> Session:
         session = self._sessions.get(sid)
-        if session is None:
+        if session is not None:
+            return session
+        try:
+            session = self._store.read_meta(sid)
+        except (OSError, ValueError, KeyError, TypeError):
             raise HandlerError(SESSION_NOT_FOUND, "session not found")
+        self._sessions[sid] = session
+        self._locks.setdefault(sid, asyncio.Lock())
         return session

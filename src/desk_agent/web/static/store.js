@@ -147,6 +147,11 @@ export function respondPermission(toolUseId, decision) {
   return api.respondPermission(toolUseId, decision);
 }
 
+// dry-run 预览：请求决策链轨迹 + 只读工具副作用预览（不执行、不落盘）
+export function previewPermission(toolUseId, toolName, params, sessionId) {
+  return api.previewPermission(toolUseId, toolName, params, sessionId);
+}
+
 export async function compact() {
   const sid = state.currentSessionId;
   if (!sid) return null;

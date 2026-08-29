@@ -60,6 +60,13 @@ class PermissionRespondBody(BaseModel):
     decision: str
 
 
+class PermissionPreviewBody(BaseModel):
+    tool_use_id: str
+    tool_name: str
+    params: dict[str, Any] = {}
+    session_id: str = ""
+
+
 class CompactBody(BaseModel):
     focus: str = ""
 
@@ -224,6 +231,22 @@ def _build_app(config: DeskConfig, web_config: WebServerConfig, bridge: CoreBrid
         return await call(
             "permission.respond",
             {"tool_use_id": body.tool_use_id, "decision": body.decision},
+        )
+
+    @app.post("/api/permission/preview")
+    async def permission_preview(
+        request: Request, body: PermissionPreviewBody
+    ) -> dict[str, Any]:
+        require_auth(request)
+        require_csrf(request)
+        return await call(
+            "permission.preview",
+            {
+                "tool_use_id": body.tool_use_id,
+                "tool_name": body.tool_name,
+                "params": body.params,
+                "session_id": body.session_id,
+            },
         )
 
     @app.get("/api/runs")

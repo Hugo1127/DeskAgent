@@ -832,6 +832,153 @@
 }
 ```
 
+### PermissionPreviewCommand
+
+| 字段 | 类型 | 必填 |
+|---|---|---|
+| `type` | `string` | 否 |
+| `tool_use_id` | `string` | 是 |
+| `tool_name` | `string` | 是 |
+| `params` | `object` | 否 |
+| `session_id` | `string` | 否 |
+
+```json
+{
+  "properties": {
+    "type": {
+      "const": "permission.preview",
+      "default": "permission.preview",
+      "title": "类型",
+      "type": "string"
+    },
+    "tool_use_id": {
+      "title": "工具调用 ID",
+      "type": "string"
+    },
+    "tool_name": {
+      "title": "工具名称",
+      "type": "string"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "参数",
+      "type": "object"
+    },
+    "session_id": {
+      "default": "",
+      "title": "会话 ID",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tool_use_id",
+    "tool_name"
+  ],
+  "title": "PermissionPreviewCommand",
+  "type": "object"
+}
+```
+
+**示例：**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "u-8",
+  "method": "permission.preview",
+  "params": {
+    "tool_use_id": "toolu_01",
+    "tool_name": "bash",
+    "params": {
+      "command": "rm -rf build/",
+      "timeout": 30
+    },
+    "session_id": "sess-abc123def456"
+  }
+}
+```
+
+### PermissionPreviewResult
+
+| 字段 | 类型 | 必填 |
+|---|---|---|
+| `ok` | `boolean` | 否 |
+| `tool_use_id` | `string` | 否 |
+| `decision` | `string` | 否 |
+| `tier` | `string` | 否 |
+| `matched_rule` | `string` | 否 |
+| `reason` | `string` | 否 |
+| `preview_text` | `string` | 否 |
+| `safe` | `boolean` | 否 |
+
+```json
+{
+  "properties": {
+    "ok": {
+      "default": true,
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "tool_use_id": {
+      "default": "",
+      "title": "工具调用 ID",
+      "type": "string"
+    },
+    "decision": {
+      "default": "",
+      "title": "决策结果",
+      "type": "string"
+    },
+    "tier": {
+      "default": "",
+      "title": "命中决策层级",
+      "type": "string"
+    },
+    "matched_rule": {
+      "default": "",
+      "title": "命中规则",
+      "type": "string"
+    },
+    "reason": {
+      "default": "",
+      "title": "原因说明",
+      "type": "string"
+    },
+    "preview_text": {
+      "default": "",
+      "title": "预览文本",
+      "type": "string"
+    },
+    "safe": {
+      "default": true,
+      "title": "是否安全",
+      "type": "boolean"
+    }
+  },
+  "title": "PermissionPreviewResult",
+  "type": "object"
+}
+```
+
+**示例：**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "u-8",
+  "result": {
+    "ok": true,
+    "tool_use_id": "toolu_01",
+    "decision": "ask",
+    "tier": "tier2_outside_cwd",
+    "matched_rule": "outside-cwd heuristic",
+    "reason": "bash 命令疑似操作工作目录之外路径，强制询问，不可被缓存绕过",
+    "preview_text": "命令（不执行，仅静态预览）:...",
+    "safe": true
+  }
+}
+```
+
 ## 服务端推送（Server Push）
 
 守护进程通过同一 TCP 连接向已订阅的客户端推送事件。
@@ -1013,7 +1160,7 @@
         }
       ],
       "default": null,
-      "title": "结束原因"
+      "title": "原因说明"
     },
     "steps": {
       "title": "总步数",

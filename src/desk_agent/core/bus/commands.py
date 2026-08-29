@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Discriminator
+from pydantic import BaseModel, Discriminator, Field
 
 from desk_agent.core.session.model import SessionMode, SessionStatus
 
@@ -91,6 +91,26 @@ class SessionCloseResult(BaseModel):
     status: SessionStatus
 
 
+class PermissionPreviewCommand(BaseModel):
+    type: Literal["permission.preview"] = "permission.preview"
+    tool_use_id: str
+    tool_name: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    session_id: str = ""
+
+
+class PermissionPreviewResult(BaseModel):
+    ok: bool = True
+    tool_use_id: str = ""
+    # "allow" | "deny" | "ask"（决策链轨迹与真实审批一致）
+    decision: str = ""
+    tier: str = ""
+    matched_rule: str = ""
+    reason: str = ""
+    preview_text: str = ""
+    safe: bool = True
+
+
 class PermissionRespondCommand(BaseModel):
     type: Literal["permission.respond"] = "permission.respond"
     tool_use_id: str
@@ -142,6 +162,7 @@ Command = Annotated[
     | SessionCloseCommand
     | PermissionRespondCommand
     | SessionCompactCommand
-    | SessionListCommand,
+    | SessionListCommand
+    | PermissionPreviewCommand,
     Discriminator("type"),
 ]

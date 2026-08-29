@@ -14,6 +14,8 @@ from desk_agent.core.bus.commands import (
     EventSubscribeResult,
     HelloCommand,
     HelloResult,
+    PermissionPreviewCommand,
+    PermissionPreviewResult,
     PingCommand,
     PongResult,
     SessionCloseCommand,
@@ -82,7 +84,7 @@ _FIELD_TITLES_ZH: dict[str, str] = {
     "listen_addr": "监听地址",
     "version": "版本",
     "ts": "时间戳",
-    "reason": "结束原因",
+    "reason": "原因说明",
     "steps": "总步数",
     "step": "步号",
     "tool_use_id": "工具调用 ID",
@@ -105,6 +107,11 @@ _FIELD_TITLES_ZH: dict[str, str] = {
     "source": "来源",
     "message": "消息",
     "last_run_id": "最近一次运行 ID",
+    "decision": "决策结果",
+    "tier": "命中决策层级",
+    "matched_rule": "命中规则",
+    "preview_text": "预览文本",
+    "safe": "是否安全",
 }
 
 
@@ -233,6 +240,31 @@ def generate() -> str:
             "ts": ts,
         },
     }
+    permission_preview_req_example = {
+        "jsonrpc": "2.0",
+        "id": "u-8",
+        "method": "permission.preview",
+        "params": {
+            "tool_use_id": "toolu_01",
+            "tool_name": "bash",
+            "params": {"command": "rm -rf build/", "timeout": 30},
+            "session_id": session_id,
+        },
+    }
+    permission_preview_resp_example = {
+        "jsonrpc": "2.0",
+        "id": "u-8",
+        "result": {
+            "ok": True,
+            "tool_use_id": "toolu_01",
+            "decision": "ask",
+            "tier": "tier2_outside_cwd",
+            "matched_rule": "outside-cwd heuristic",
+            "reason": "bash 命令疑似操作工作目录之外路径，强制询问，不可被缓存绕过",
+            "preview_text": "命令（不执行，仅静态预览）:...",
+            "safe": True,
+        },
+    }
 
     sections = [
         "# 通信协议（Wire Protocol）\n\n",
@@ -283,6 +315,12 @@ def generate() -> str:
         _model_section("SessionListResult", SessionListResult),
         "\n",
         _model_section("SessionSummary", SessionSummary),
+        "\n",
+        _model_section("PermissionPreviewCommand", PermissionPreviewCommand,
+            permission_preview_req_example),
+        "\n",
+        _model_section("PermissionPreviewResult", PermissionPreviewResult,
+            permission_preview_resp_example),
         "\n## 服务端推送（Server Push）\n\n",
         "守护进程通过同一 TCP 连接向已订阅的客户端推送事件。\n\n",
         _model_section("EventPushEnvelope", EventPushEnvelope, event_push_example),

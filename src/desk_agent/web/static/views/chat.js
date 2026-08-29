@@ -8,6 +8,7 @@ import {
   loadHistory,
   on,
   onEvent,
+  previewPermission,
   respondPermission,
   sendMessage,
   switchSession,
@@ -316,11 +317,12 @@ export function initChat(root) {
       }
 
       case "permission.requested": {
+        const sid = getState().currentSessionId;
         const modal = permissionModal(evt, (toolUseId, decision) => {
           respondPermission(toolUseId, decision).catch((e) => {
             setRunStatus("permission respond error: " + e.message, "err");
           });
-        });
+        }, () => previewPermission(evt.tool_use_id, evt.tool_name, evt.params, sid));
         document.body.appendChild(modal.overlay);
         pendingPerms.set(String(evt.tool_use_id), modal);
         break;

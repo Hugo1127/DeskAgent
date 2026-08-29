@@ -488,6 +488,50 @@ code,
   word-break: break-word;
   margin-bottom: 14px;
 }
+.modal-reason {
+  margin-bottom: 10px;
+  color: var(--yellow, #e5c07b);
+  font-size: 12px;
+  word-break: break-word;
+}
+.modal-tier {
+  font-family: var(--mono);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.modal-preview-area {
+  margin: 4px 0 14px;
+}
+.modal-preview-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+.modal-preview-text {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 6px;
+}
+.modal-preview-muted {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.modal-preview-err {
+  color: var(--red);
+  font-size: 12px;
+  word-break: break-word;
+}
 .modal-actions {
   display: flex;
   gap: 8px;

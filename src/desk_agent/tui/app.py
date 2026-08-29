@@ -176,6 +176,14 @@ class PermissionSelect(Static):
             self.decision = decision
             super().__init__()
 
+    # 用户请求 dry-run 预览时发布，携带工具 ID
+    class PreviewRequested(Message):
+        # 初始化预览请求消息，存储控件引用和工具 ID
+        def __init__(self, widget: PermissionSelect, tool_use_id: str) -> None:
+            self.widget = widget
+            self.tool_use_id = tool_use_id
+            super().__init__()
+
     # 初始化控件，存储工具 ID（用于 IPC 回复）
     def __init__(self, tool_use_id: str) -> None:
         super().__init__("")
@@ -220,14 +228,17 @@ class PermissionSelect(Static):
                 lines.append(f"  [bold cyan]❯ {label}[/bold cyan]  [dim]{key_hint}[/dim]")
             else:
                 lines.append(f"    {label}  [dim]{key_hint}[/dim]")
-        lines.append("[dim]  ↑↓ navigate   enter confirm[/dim]")
+        lines.append("[dim]  ↑↓ navigate   enter confirm   p preview[/dim]")
         return "\n".join(lines)
 
     # 方向键导航；快捷键直接选择；enter 确认光标位置
     def on_key(self, event: events.Key) -> None:
         log.debug("PermissionSelect.on_key  key=%r  char=%r", event.key, event.character)
         key = event.key
-        if key in ("up", "k"):
+        if key in ("p", "?"):
+            event.stop()
+            self._request_preview()
+        elif key in ("up", "k"):
             event.stop()
             self._cursor = (self._cursor - 1) % len(self._CHOICES)
             self.update(self._render_ui())
@@ -249,6 +260,11 @@ class PermissionSelect(Static):
         log.debug("PermissionSelect._pick  decision=%s", decision)
         self.post_message(self.Decided(self, self._tool_use_id, decision))
 
+    # 请求 dry-run 预览：由宿主 App 负责 IPC 请求与展示
+    def _request_preview(self) -> None:
+        log.debug("PermissionSelect._request_preview  tool_use_id=%s", self._tool_use_id)
+        self.post_message(self.PreviewRequested(self, self._tool_use_id))
+
 
 class PermissionBlock(Static):
     """日志里的权限审批摘要"""
@@ -269,17 +285,33 @@ class PermissionBlock(Static):
             self.decision = decision
             super().__init__()
 
-    # 初始化审批块，记录工具 ID、名称和参数预览
-    def __init__(self, tool_use_id: str, tool_name: str, param_preview: str) -> None:
+    # 初始化审批块，记录工具 ID、名称、参数预览与决策原因
+    def __init__(
+        self,
+        tool_use_id: str,
+        tool_name: str,
+        param_preview: str,
+        params: dict[str, Any] | None = None,
+        decision_reason: str = "",
+    ) -> None:
         self._tool_use_id = tool_use_id
         self._tool_name = tool_name
         self._param_preview = param_preview
+        self._params = params or {}
+        self._decision_reason = decision_reason
         self._resolved = False
         super().__init__(self._pending_text(), classes="log-line")
 
     def _pending_text(self) -> str:
         preview = f"  [dim]{self._param_preview}[/dim]" if self._param_preview else ""
-        return f"[bold red]? permission[/bold red]  [bold]{self._tool_name}[/bold]{preview}"
+        reason = (
+            f"\n  [dim]{self._decision_reason}[/dim]"
+            if self._decision_reason else ""
+        )
+        return (
+            f"[bold red]? permission[/bold red]  [bold]{self._tool_name}[/bold]"
+            f"{preview}{reason}"
+        )
 
     # 将块收缩为单行摘要并发布 Resolved 消息
     def _resolve(self, decision: str) -> None:
@@ -592,6 +624,9 @@ class DeskTuiApp(App[None]):
             if decision:
                 event.stop()
                 select._pick(decision)
+            elif key in ("p", "?"):
+                event.stop()
+                select._request_preview()
             elif key in ("up", "k"):
                 event.stop()
                 select._cursor = (select._cursor - 1) % len(PermissionSelect._CHOICES)
@@ -706,6 +741,37 @@ class DeskTuiApp(App[None]):
                     p.focus()
         except Exception:
             log.exception("on_permission_select_decided failed tool_use_id=%s", tool_use_id)
+
+    # 处理内联审批控件的 dry-run 预览请求：IPC 请求并把结果追加到日志流
+    async def on_permission_select_preview_requested(
+        self, msg: PermissionSelect.PreviewRequested
+    ) -> None:
+        block = self._pending_permission_blocks.get(msg.tool_use_id)
+        if block is None or self._client is None:
+            return
+        self._append(Static("[dim]preview...[/dim]", classes="log-line"))
+        try:
+            result = await self._client.send_command(
+                "permission.preview",
+                {
+                    "tool_use_id": msg.tool_use_id,
+                    "tool_name": block._tool_name,
+                    "params": block._params,
+                    "session_id": self._session_id or "",
+                },
+            )
+        except (IpcError, RuntimeError, OSError) as e:
+            self._append(Static(f"[red]preview error: {e}[/red]", classes="log-line"))
+            return
+        meta = (
+            f"[bold]preview[/bold]  decision={result.get('decision', '')}  "
+            f"{result.get('tier', '')}"
+        )
+        if result.get("reason"):
+            meta += f"  [dim]- {result['reason']}[/dim]"
+        self._append(Static(meta, classes="log-line"))
+        text = result.get("preview_text") or "(no preview available)"
+        self._append(Static(text, markup=False, classes="log-line"))
 
     # 向日志视图追加一个 widget 并滚动到底部
     def _append(self, widget: Widget) -> None:
@@ -1018,7 +1084,13 @@ class DeskTuiApp(App[None]):
                 "permission.requested tool=%s id=%s  app.focused=%s",
                 tool_name, tool_use_id, _focused_repr,
             )
-            perm_block = PermissionBlock(tool_use_id, tool_name, param_preview)
+            perm_block = PermissionBlock(
+                tool_use_id,
+                tool_name,
+                param_preview,
+                params=event.get("params") or {},
+                decision_reason=str(event.get("decision_reason") or ""),
+            )
             self._pending_permission_blocks[tool_use_id] = perm_block
             prompt = self._prompt()
             if prompt is not None:

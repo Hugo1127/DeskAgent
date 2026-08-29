@@ -37,6 +37,16 @@ class ToolPolicy:
     deny_patterns: list[str] = field(default_factory=list)
 
 
+@dataclass
+class PolicyTrace:
+    """策略评估轨迹：决策 + 命中层级 + 命中规则 + 人类可读原因。"""
+
+    decision: PermissionDecision
+    tier: str
+    matched_rule: str = ""
+    reason: str = ""
+
+
 DEFAULT_POLICIES: dict[str, ToolPolicy] = {
     "bash":       ToolPolicy(default=PermissionDecision.ASK),
     "write_file": ToolPolicy(default=PermissionDecision.ASK),
@@ -75,17 +85,22 @@ def param_preview(tool_name: str, params: dict[str, Any]) -> str:
     return snippet[:_PREVIEW_MAX] if len(snippet) > _PREVIEW_MAX else snippet
 
 
-# 对工具 + 参数执行 4 层静态策略评估，返回 ALLOW/DENY/ASK
-def evaluate(
+# 对工具 + 参数执行 4 层静态策略评估，返回带命中规则的 PolicyTrace
+def trace_evaluate(
     tool_name: str,
     params: dict[str, Any],
     policy: ToolPolicy | None = None,
-) -> PermissionDecision:
+) -> PolicyTrace:
     if policy is None:
         policy = DEFAULT_POLICIES.get(tool_name)
 
     if policy is None:
-        return _UNKNOWN_TOOL_DEFAULT
+        return PolicyTrace(
+            decision=_UNKNOWN_TOOL_DEFAULT,
+            tier="tier4_default",
+            matched_rule="unknown tool",
+            reason="工具未登记策略，按默认 ask 处理",
+        )
 
     command = str(params.get("command", "")) if tool_name == "bash" else ""
 
@@ -93,17 +108,60 @@ def evaluate(
     if command:
         for pat in policy.deny_patterns:
             if re.search(pat, command):
-                return PermissionDecision.DENY
+                return PolicyTrace(
+                    decision=PermissionDecision.DENY,
+                    tier="tier1_deny_pattern",
+                    matched_rule=f"deny_pattern: {pat}",
+                    reason="命中 deny_patterns 黑名单，直接拒绝",
+                )
 
     # Tier 2: OUTSIDE_CWD_HEURISTICS — forced ASK, not bypassable
     if command and matches_outside_cwd(command):
-        return PermissionDecision.ASK
+        return PolicyTrace(
+            decision=PermissionDecision.ASK,
+            tier="tier2_outside_cwd",
+            matched_rule="outside-cwd heuristic",
+            reason="bash 命令疑似操作工作目录之外路径，强制询问",
+        )
 
     # Tier 3: allow_patterns (bash only)
     if command:
         for pat in policy.allow_patterns:
             if re.search(pat, command):
-                return PermissionDecision.ALLOW
+                return PolicyTrace(
+                    decision=PermissionDecision.ALLOW,
+                    tier="tier3_allow_pattern",
+                    matched_rule=f"allow_pattern: {pat}",
+                    reason="命中 allow_patterns 白名单，自动放行",
+                )
 
     # Tier 4: tool default
-    return policy.default
+    if policy.default == PermissionDecision.ALLOW:
+        return PolicyTrace(
+            decision=PermissionDecision.ALLOW,
+            tier="tier4_default",
+            matched_rule="tool default: allow",
+            reason="工具默认策略为 allow，自动放行",
+        )
+    if policy.default == PermissionDecision.DENY:
+        return PolicyTrace(
+            decision=PermissionDecision.DENY,
+            tier="tier4_default",
+            matched_rule="tool default: deny",
+            reason="工具默认策略为 deny，自动拒绝",
+        )
+    return PolicyTrace(
+        decision=PermissionDecision.ASK,
+        tier="tier4_default",
+        matched_rule="tool default: ask",
+        reason="工具默认策略为 ask，需要人工审批",
+    )
+
+
+# 对工具 + 参数执行静态策略评估，仅返回 ALLOW/DENY/ASK（轨迹见 trace_evaluate）
+def evaluate(
+    tool_name: str,
+    params: dict[str, Any],
+    policy: ToolPolicy | None = None,
+) -> PermissionDecision:
+    return trace_evaluate(tool_name, params, policy).decision

@@ -118,6 +118,33 @@ def test_permission_respond_forwards() -> None:
         )
 
 
+def test_permission_preview_forwards() -> None:
+    bridge = _FakeBridge(responses={"permission.preview": {"ok": True, "decision": "ask"}})
+    with make_client(bridge) as client:
+        csrf = client.get("/api/bootstrap").json()["csrf_token"]
+        r = client.post(
+            "/api/permission/preview",
+            json={
+                "tool_use_id": "toolu_1",
+                "tool_name": "bash",
+                "params": {"command": "echo hi"},
+                "session_id": "sess-1",
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert r.status_code == 200
+        assert r.json() == {"ok": True, "decision": "ask"}
+        assert bridge.calls[0] == (
+            "permission.preview",
+            {
+                "tool_use_id": "toolu_1",
+                "tool_name": "bash",
+                "params": {"command": "echo hi"},
+                "session_id": "sess-1",
+            },
+        )
+
+
 def test_daemon_offline_maps_to_503() -> None:
     bridge = _FakeBridge(exc=ConnectionError("daemon offline"))
     with make_client(bridge) as client:

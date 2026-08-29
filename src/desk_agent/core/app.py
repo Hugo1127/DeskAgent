@@ -22,6 +22,8 @@ from desk_agent.core.bus.commands import (
     AgentRunResult,
     EventSubscribeCommand,
     EventSubscribeResult,
+    PermissionPreviewCommand,
+    PermissionPreviewResult,
     PermissionRespondCommand,
     PermissionRespondResult,
     PongResult,
@@ -183,6 +185,20 @@ class CoreApp:
         self._permission_manager.respond(cmd.tool_use_id, cmd.decision)
         return PermissionRespondResult()
 
+    # dry-run 预览：返回决策链轨迹 + 只读工具副作用预览（不注册 pending、不落盘）
+    async def _permission_preview_handler(
+        self, params: dict[str, Any]
+    ) -> PermissionPreviewResult:
+        cmd = PermissionPreviewCommand.model_validate(params)
+        if self._permission_manager is None:
+            return PermissionPreviewResult(
+                ok=False, reason="PermissionManager not initialized"
+            )
+        result = await self._permission_manager.preview(
+            cmd.tool_use_id, cmd.tool_name, cmd.params, cmd.session_id
+        )
+        return PermissionPreviewResult(**result)
+
     # 手动压缩 session thread，将摘要持久化写入 thread.jsonl
     async def _session_compact_handler(self, params: dict[str, Any]) -> SessionCompactResult:
         assert self._sessions is not None
@@ -327,6 +343,7 @@ class CoreApp:
         server.register("session.list", self._session_list_handler)
         server.register("session.close", self._session_close_handler)
         server.register("permission.respond", self._permission_respond_handler)
+        server.register("permission.preview", self._permission_preview_handler)
         server.register("session.compact", self._session_compact_handler)
 
         addr = await server.start()

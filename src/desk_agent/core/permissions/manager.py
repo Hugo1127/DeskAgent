@@ -13,10 +13,12 @@ from typing import Any
 from desk_agent.core.permissions.policy import (
     DEFAULT_POLICIES,
     PermissionDecision,
+    PolicyTrace,
     ToolPolicy,
     matches_outside_cwd,
     param_preview,
 )
+from desk_agent.core.permissions.preview import preview_tool
 from desk_agent.core.permissions.storage import load_policy_file, save_policy_file
 
 logger = logging.getLogger(__name__)
@@ -61,6 +63,97 @@ class PermissionManager:
         policy = self._policies.get(tool_name)
         return evaluate(tool_name, params, policy)
 
+    # 复现 check_and_wait 的完整决策链（含 session/持久化缓存），返回带命中规则的轨迹
+    def _trace(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        session_id: str,
+    ) -> PolicyTrace:
+        command = str(params.get("command", "")) if tool_name == "bash" else ""
+        policy = self._policies.get(tool_name)
+
+        # Tier 1: deny_patterns（bash only，不可被缓存绕过）
+        if command and policy:
+            for pat in policy.deny_patterns:
+                if re.search(pat, command):
+                    return PolicyTrace(
+                        decision=PermissionDecision.DENY,
+                        tier="tier1_deny_pattern",
+                        matched_rule=f"deny_pattern: {pat}",
+                        reason="命中 deny_patterns 黑名单，直接拒绝，不可被缓存绕过",
+                    )
+
+        # Tier 2: OUTSIDE_CWD_HEURISTICS（bash only，强制 ASK，不可被任何缓存绕过）
+        if command and matches_outside_cwd(command):
+            return PolicyTrace(
+                decision=PermissionDecision.ASK,
+                tier="tier2_outside_cwd",
+                matched_rule="outside-cwd heuristic",
+                reason="bash 命令疑似操作工作目录之外路径，强制询问，不可被缓存绕过",
+            )
+
+        # Tier 3: session always 缓存
+        session_key = (session_id, tool_name)
+        if session_key in self._session_always:
+            cached = self._session_always[session_key]
+            return PolicyTrace(
+                decision=(
+                    PermissionDecision.ALLOW
+                    if cached == "allow" else PermissionDecision.DENY
+                ),
+                tier="tier3_session_cache",
+                matched_rule=f"session cache: {cached}",
+                reason=f"本 session 已有 always_{cached} 决策缓存",
+            )
+
+        # Tier 4: persistent always（跨 session）
+        if tool_name in self._persistent_always:
+            cached = self._persistent_always[tool_name]
+            return PolicyTrace(
+                decision=(
+                    PermissionDecision.ALLOW
+                    if cached == "allow" else PermissionDecision.DENY
+                ),
+                tier="tier4_persistent_cache",
+                matched_rule=f"policy.toml always: {cached}",
+                reason=f"policy.toml 已持久化 always_{cached}",
+            )
+
+        # Tier 5: allow_patterns（bash only）
+        if command and policy:
+            for pat in policy.allow_patterns:
+                if re.search(pat, command):
+                    return PolicyTrace(
+                        decision=PermissionDecision.ALLOW,
+                        tier="tier5_allow_pattern",
+                        matched_rule=f"allow_pattern: {pat}",
+                        reason="命中 allow_patterns 白名单，自动放行",
+                    )
+
+        # Tier 6: tool default
+        if policy is not None:
+            if policy.default == PermissionDecision.ALLOW:
+                return PolicyTrace(
+                    decision=PermissionDecision.ALLOW,
+                    tier="tier6_default",
+                    matched_rule="tool default: allow",
+                    reason="工具默认策略为 allow，自动放行",
+                )
+            if policy.default == PermissionDecision.DENY:
+                return PolicyTrace(
+                    decision=PermissionDecision.DENY,
+                    tier="tier6_default",
+                    matched_rule="tool default: deny",
+                    reason="工具默认策略为 deny，自动拒绝",
+                )
+        return PolicyTrace(
+            decision=PermissionDecision.ASK,
+            tier="tier6_default",
+            matched_rule="tool default: ask / unknown tool",
+            reason="工具默认策略为 ask 或未登记工具，需要人工审批",
+        )
+
     # 检查权限；如需 ask 则向客户端发事件并等待响应；返回 (allowed, decision_str)
     async def check_and_wait(
         self,
@@ -70,49 +163,17 @@ class PermissionManager:
         session_id: str,
         event_emitter: Callable[[dict[str, Any]], Awaitable[None]],
     ) -> tuple[bool, str]:
-        command = str(params.get("command", "")) if tool_name == "bash" else ""
-        policy = self._policies.get(tool_name)
-
-        # Tier 1: deny_patterns（bash only，不可被缓存绕过）
-        if command and policy:
-            for pat in policy.deny_patterns:
-                if re.search(pat, command):
-                    logger.debug("permission: deny_pattern hit tool=%s", tool_name)
-                    return False, "auto_deny"
-
-        # Tier 2: OUTSIDE_CWD_HEURISTICS（bash only，强制 ASK，不可被任何缓存绕过）
-        outside_cwd = bool(command and matches_outside_cwd(command))
-
-        if not outside_cwd:
-            # Tier 3: session always 缓存
-            session_key = (session_id, tool_name)
-            if session_key in self._session_always:
-                cached = self._session_always[session_key]
-                logger.debug("permission: session cache hit tool=%s decision=%s", tool_name, cached)
-                return cached == "allow", f"auto_{cached}"
-
-            # Tier 4: persistent always（跨 session）
-            if tool_name in self._persistent_always:
-                cached = self._persistent_always[tool_name]
-                logger.debug(
-                    "permission: persistent cache hit tool=%s decision=%s",
-                    tool_name, cached,
-                )
-                return cached == "allow", f"auto_{cached}"
-
-            # Tier 5: allow_patterns（bash only）
-            if command and policy:
-                for pat in policy.allow_patterns:
-                    if re.search(pat, command):
-                        return True, "auto_allow"
-
-            # Tier 6: tool default
-            if policy is not None:
-                if policy.default == PermissionDecision.ALLOW:
-                    return True, "auto_allow"
-                if policy.default == PermissionDecision.DENY:
-                    return False, "auto_deny"
-            # default == ASK（bash、unknown tool）→ fall through to Future
+        trace = self._trace(tool_name, params, session_id)
+        if trace.decision == PermissionDecision.ALLOW:
+            logger.debug(
+                "permission: auto allow tool=%s tier=%s", tool_name, trace.tier
+            )
+            return True, "auto_allow"
+        if trace.decision == PermissionDecision.DENY:
+            logger.debug(
+                "permission: auto deny tool=%s tier=%s", tool_name, trace.tier
+            )
+            return False, "auto_deny"
 
         # ASK 路径（来自 OUTSIDE_CWD 强制 ASK，或 default=ASK）
         loop = asyncio.get_event_loop()
@@ -132,6 +193,8 @@ class PermissionManager:
                 "param_preview": param_preview(tool_name, params),
                 "session_id": session_id,
                 "ts": _now(),
+                "tier": trace.tier,
+                "decision_reason": trace.reason,
             }
         )
 
@@ -147,6 +210,28 @@ class PermissionManager:
 
         allowed = self._apply_response(raw, session_id, tool_name)
         return allowed, raw
+
+    # dry-run 预览：完整复现决策链 + 只读工具副作用预览。
+    # 不注册 pending、不写 policy.toml、不产生任何事件。
+    async def preview(
+        self,
+        tool_use_id: str,
+        tool_name: str,
+        params: dict[str, Any],
+        session_id: str = "",
+    ) -> dict[str, Any]:
+        trace = self._trace(tool_name, params, session_id)
+        preview_text = await preview_tool(tool_name, params)
+        return {
+            "ok": True,
+            "tool_use_id": tool_use_id,
+            "decision": trace.decision.value,
+            "tier": trace.tier,
+            "matched_rule": trace.matched_rule,
+            "reason": trace.reason,
+            "preview_text": preview_text,
+            "safe": True,
+        }
 
     # 处理客户端返回的审批决策，resolve 对应 Future
     def respond(self, tool_use_id: str, decision: str) -> None:

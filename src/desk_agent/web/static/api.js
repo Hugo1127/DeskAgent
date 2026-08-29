@@ -61,5 +61,12 @@ export const api = {
     request("POST", `/api/sessions/${encodeURIComponent(sessionId)}/compact`, { focus }),
   respondPermission: (toolUseId, decision) =>
     request("POST", "/api/permission/respond", { tool_use_id: toolUseId, decision }),
+  previewPermission: (toolUseId, toolName, params, sessionId) =>
+    request("POST", "/api/permission/preview", {
+      tool_use_id: toolUseId,
+      tool_name: toolName,
+      params,
+      session_id: sessionId || "",
+    }),
   listRuns: () => request("GET", "/api/runs"),
 };

@@ -21,6 +21,7 @@ class ChatPrinter:
     def __init__(self) -> None:
         self._inline = False
         self.pending_permission_id: str | None = None
+        self.pending_permission: dict[str, Any] | None = None
 
     # 若当前 LLM token 尚未换行，则补一个换行
     def _ensure_newline(self) -> None:
@@ -43,14 +44,25 @@ class ChatPrinter:
             param_preview = str(event.get("param_preview", ""))
             tool_use_id = str(event.get("tool_use_id", ""))
             print(f"[permission] {tool_name}  {param_preview}")
-            print("  y=allow once  a=always allow  n=deny once  d=always deny")
+            reason = str(event.get("decision_reason", ""))
+            if reason:
+                print(f"  {reason}")
+            print("  y=allow once  a=always allow  n=deny once  d=always deny  p=preview")
             self.pending_permission_id = tool_use_id
+            self.pending_permission = {
+                "tool_use_id": tool_use_id,
+                "tool_name": tool_name,
+                "params": dict(event.get("params") or {}),
+            }
         elif t == "session.waiting_for_input":
             self._ensure_newline()
             self.pending_permission_id = None
+            self.pending_permission = None
             print("[waiting for input]")
         elif t == "session.closed":
             self._ensure_newline()
+            self.pending_permission_id = None
+            self.pending_permission = None
             print("session closed.")
 
 
@@ -92,15 +104,41 @@ async def _chat_async(config: DeskConfig) -> int:
             if not content:
                 continue
 
-            # 有待审批的权限请求时，将用户输入解释为决策而非聊天消息
+            # 有待审批的权限请求时，将用户输入解释为决策或预览而非聊天消息
             if printer.pending_permission_id:
+                if content.lower() in ("p", "preview"):
+                    info = printer.pending_permission
+                    if info is None:
+                        continue
+                    try:
+                        result = await client.send_command(
+                            "permission.preview",
+                            {
+                                "tool_use_id": info["tool_use_id"],
+                                "tool_name": info["tool_name"],
+                                "params": info["params"],
+                                "session_id": session_id,
+                            },
+                        )
+                    except IpcError as e:
+                        print(f"  preview error: {e}")
+                    else:
+                        print(
+                            f"  [preview] decision={result.get('decision', '')}  "
+                            f"{result.get('tier', '')}"
+                        )
+                        if result.get("reason"):
+                            print(f"  [preview] {result['reason']}")
+                        print(result.get("preview_text", "(no preview available)"))
+                    continue
                 decision = _DECISION_MAP.get(content.lower())
                 if decision is None:
                     print("  enter y (allow once), a (always allow), "
-                          "n (deny once), d (always deny)")
+                          "n (deny once), d (always deny), p (preview)")
                     continue
                 tool_use_id = printer.pending_permission_id
                 printer.pending_permission_id = None
+                printer.pending_permission = None
                 await client.send_command(
                     "permission.respond",
                     {"tool_use_id": tool_use_id, "decision": decision},

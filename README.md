@@ -9,7 +9,7 @@ DeskAgent 是一个**本地 AI Agent 运行时**（mini 版 Claude Code）：以
 - **守护进程 + 多客户端**：`desk-core` 常驻后台，CLI / TUI 多客户端接入，断开不中断执行、重连可恢复订阅
 - **ReAct AgentLoop**：plan → act → observe 迭代闭环，支持思考、多步执行、max_steps 兜底
 - **类型化事件流**：Pydantic v2 定义命令与事件，EventBus 驱动，每次 run 落盘 `events.jsonl` 支持回放
-- **四级权限审批**：`allow_once / always_allow / deny_once / always_deny`，bash 越界路径强制 ASK，决策持久化到 `policy.toml`
+- **四级权限审批 + dry-run 预览**：`allow_once / always_allow / deny_once / always_deny`，bash 越界路径强制 ASK，决策持久化到 `policy.toml`；审批前可一键预览决策链轨迹与只读工具副作用（bash 语法检查 / write_file diff），不执行、不落盘
 - **会话记忆 + 上下文治理**：Session / notes 分层延续上下文，水位检测、tool_result 截断、自动/手动压缩（`/compact`）
 - **Skills**：Markdown front-matter 定义行为预设与工具白名单，三级查找覆盖，无需改代码扩展
 - **子 Agent + MCP**：`spawn_agent` 前台/后台编排、事件桥接；MCP 客户端支持 stdio / TCP 接入外部工具
@@ -67,7 +67,7 @@ uv run desk-web --open                    # 8. Web 界面（自动开浏览器 �
 | `desk core start / stop / status` | 守护进程管理（后台运行） |
 | `desk-core` | 前台运行守护进程（日志进终端，Ctrl+C 停止） |
 | `desk run --goal "<目标>"` | 单次运行 Agent 任务（事件流实时打印） |
-| `desk chat` | 多轮会话，权限审批用 `y/a/n/d` 响应 |
+| `desk chat` | 多轮会话，权限审批用 `y/a/n/d` 响应（`p` 查看 dry-run 预览） |
 | `desk trace [run_id]` | 查看 trace（`--layer` / `--direction` / `--raw` / `--follow`） |
 | `desk-tui [--replay <run_id>]` | Textual 终端 UI（可回放历史 run） |
 | `desk-web [--host --port --open]` | Web 界面（`--open` 自动开浏览器） |
@@ -142,6 +142,8 @@ port = 9987            # desk-web 端口（默认 9987，可用 DESK_WEB_PORT �
 | `spawn_agent` / `agent_result` | 派生子 Agent / 获取后台结果 | 询问 |
 
 权限评估采用**静态策略分层**：deny_patterns → bash 越界路径启发式（不可绕过）→ session 级缓存 → 持久化缓存 → allow_patterns → 工具默认策略；命中 ASK 时推送事件给客户端，`always_allow` / `always_deny` 持久化到 `~/.desk/policy.toml`。
+
+审批前支持 **dry-run 预览**（CLI chat 按 `p`，TUI 按 `p`，Web 审批弹窗点 Dry-run preview）：返回真实决策链轨迹（命中层级 / 规则 / 原因）与只读副作用预览——bash 仅做 `bash -n` 语法检查与静态危险标注（绝不执行命令）、write_file 展示新旧内容 diff、文件类工具展示 stat 元数据；预览不执行、不写入、不注册审批、不落盘。
 
 ## Skills 与子 Agent
 

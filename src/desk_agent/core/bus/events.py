@@ -159,6 +159,10 @@ class PermissionRequestedEvent(BaseModel):
     param_preview: str
     session_id: str
     ts: str
+    # 命中决策链层级（如 tier2_outside_cwd），可选字段，兼容旧客户端
+    tier: str = ""
+    # 人类可读的审批原因（为什么触发询问），可选字段
+    decision_reason: str = ""
 
 
 class PermissionGrantedEvent(BaseModel):

@@ -20,7 +20,8 @@ export function escapeHtml(value) {
 export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs || {})) {
-    if (value === null || value === undefined) continue;
+    // 布尔 false 表示「不设置该属性」（如 disabled:false 不能写成 disabled="false"）
+    if (value === null || value === undefined || value === false) continue;
     if (key === "class") node.className = value;
     else if (key === "text") node.textContent = value;
     else if (key === "html") node.innerHTML = value;
@@ -113,15 +114,35 @@ export function toolCard(toolName, params) {
   };
 }
 
-// 权限审批模态框。返回 { overlay, close }
-export function permissionModal(perm, onDecision) {
-  const { tool_use_id: toolUseId, tool_name: toolName, params, param_preview: preview } = perm;
+// 权限审批模态框。onDecision(toolUseId, decision) 提交决策；
+// onPreview() 可选，返回 Promise<{decision, tier, reason, preview_text}>，用于 dry-run 预览。
+// 返回 { overlay, close }
+export function permissionModal(perm, onDecision, onPreview) {
+  const {
+    tool_use_id: toolUseId,
+    tool_name: toolName,
+    params,
+    param_preview: preview,
+    tier,
+    decision_reason: decisionReason,
+  } = perm;
   const choices = [
     ["allow_once", "Allow once", "allow"],
     ["always_allow", "Always allow", "allow"],
     ["deny_once", "Deny", "deny"],
     ["always_deny", "Always deny", "deny"],
   ];
+
+  const previewArea = el("div", { class: "modal-preview-area" },
+    el("div", { class: "modal-preview-muted" },
+      "点击下方按钮查看 dry-run 预览（只读分析，不执行命令）"),
+  );
+  const previewBtn = el("button", {
+    class: "btn btn-ghost btn-sm",
+    text: "Dry-run preview",
+    disabled: !onPreview,
+    title: "预览策略决策链与工具副作用（不执行）",
+  });
 
   const overlay = el("div", { class: "modal-overlay" });
   const dialog = el("div", { class: "modal", role: "dialog", "aria-modal": "true" },
@@ -131,10 +152,16 @@ export function permissionModal(perm, onDecision) {
       el("strong", {}, toolName),
     ),
     preview ? el("div", { class: "modal-preview" }, preview) : null,
+    tier ? el("div", { class: "modal-reason" },
+      el("span", { class: "modal-tier" }, tier),
+      decisionReason ? "  " + decisionReason : "",
+    ) : null,
     params && Object.keys(params).length
       ? el("pre", { class: "modal-params" }, formatJson(params))
       : null,
+    previewArea,
     el("div", { class: "modal-actions" },
+      previewBtn,
       ...choices.map(([decision, label, kind]) =>
         el("button", {
           class: "btn btn-" + kind,
@@ -145,6 +172,35 @@ export function permissionModal(perm, onDecision) {
     el("div", { class: "modal-hint" }, "允许/拒绝仅作用于本次工具调用；always 会持久化到 policy.toml"),
   );
   overlay.appendChild(dialog);
+
+  if (onPreview) {
+    previewBtn.addEventListener("click", async () => {
+      previewBtn.disabled = true;
+      previewBtn.textContent = "previewing...";
+      previewArea.replaceChildren(
+        el("div", { class: "modal-preview-muted" }, "loading preview..."),
+      );
+      try {
+        const r = await onPreview();
+        const meta = "decision=" + (r.decision || "?") + "  " + (r.tier || "") +
+          (r.reason ? "  -  " + r.reason : "");
+        previewArea.replaceChildren(
+          el("div", { class: "modal-preview-meta" }, meta),
+          el("pre", { class: "modal-preview-text" },
+            r.preview_text || "(no preview available)"),
+          el("div", { class: "modal-preview-muted" },
+            "预览为静态分析，不代表实际执行结果"),
+        );
+      } catch (e) {
+        previewArea.replaceChildren(
+          el("div", { class: "modal-preview-err" }, "preview error: " + e.message),
+        );
+      } finally {
+        previewBtn.disabled = false;
+        previewBtn.textContent = "Dry-run preview";
+      }
+    });
+  }
 
   function close() {
     overlay.remove();

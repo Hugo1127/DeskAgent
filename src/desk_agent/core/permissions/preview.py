@@ -5,6 +5,7 @@ import difflib
 import os
 import re
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -36,7 +37,65 @@ _GIT_BASH_CANDIDATES: tuple[str, ...] = (
     r"C:\Program Files (x86)\Git\bin\bash.exe",
 )
 
-# 探测可用的 bash：优先 DESK_BASH_PATH 环境变量，其次 PATH，最后常见 Git 安装位置
+# 相对 Git 安装根目录的 bash 候选路径（兼容不同安装布局）
+_GIT_BASH_RELATIVES: tuple[str, ...] = (
+    "bin/bash.exe",
+    "usr/bin/bash.exe",
+)
+_GIT_EXEC_PATH_TIMEOUT_S = 3.0
+
+
+def _bash_candidates_under(root: Path) -> list[str]:
+    """返回 Git 安装根目录下的候选 bash 路径。"""
+    return [str(root / relative) for relative in _GIT_BASH_RELATIVES]
+
+
+def _git_root_from_git_exe(git: str) -> Path | None:
+    """从 git 可执行文件位置向上推导 Git 安装根目录（无需启动子进程）。"""
+    path = Path(git).resolve()
+    for _ in range(5):
+        if (path / "bin" / "bash.exe").is_file() or (
+            path / "usr" / "bin" / "bash.exe"
+        ).is_file():
+            return path
+        parent = path.parent
+        if parent == path:
+            break
+        path = parent
+    return None
+
+
+def _git_root_from_exec_path(git: str) -> Path | None:
+    """通过 `git --exec-path` 推导 Git 安装根目录（覆盖非默认安装位置）。"""
+    try:
+        result = subprocess.run(
+            [git, "--exec-path"],
+            capture_output=True,
+            text=True,
+            timeout=_GIT_EXEC_PATH_TIMEOUT_S,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    exec_path = result.stdout.strip()
+    if not exec_path:
+        return None
+    path = Path(exec_path)
+    for _ in range(6):
+        if (path / "bin" / "bash.exe").is_file() or (
+            path / "usr" / "bin" / "bash.exe"
+        ).is_file():
+            return path
+        parent = path.parent
+        if parent == path:
+            break
+        path = parent
+    return None
+
+
+# 探测可用的 bash：优先 DESK_BASH_PATH 环境变量，其次 PATH，然后常见 Git 安装位置，
+# 最后从 git 可执行文件 / `git --exec-path` 推导非默认安装位置（如 D:\Programs\Git）
 def _find_bash() -> str | None:
     env_path = os.environ.get("DESK_BASH_PATH", "").strip()
     if env_path and Path(env_path).is_file():
@@ -50,9 +109,21 @@ def _find_bash() -> str | None:
         candidates.insert(
             0, str(Path(local_appdata) / "Programs" / "Git" / "bin" / "bash.exe")
         )
+    git = shutil.which("git")
+    if git:
+        root = _git_root_from_git_exe(git)
+        if root is not None:
+            candidates.extend(_bash_candidates_under(root))
     for candidate in candidates:
         if Path(candidate).is_file():
             return candidate
+    # 最后兜底：git.exe 路径推导失败时（如经 shim 调用），走 git --exec-path
+    if git:
+        root = _git_root_from_exec_path(git)
+        if root is not None:
+            for candidate in _bash_candidates_under(root):
+                if Path(candidate).is_file():
+                    return candidate
     return None
 
 
@@ -70,7 +141,7 @@ async def _preview_bash(params: dict[str, Any]) -> str:
     if hits:
         lines.append("⚠ 危险特征提示: " + "；".join(hits))
 
-    bash_path = _find_bash()
+    bash_path = await asyncio.to_thread(_find_bash)
     if bash_path is not None:
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -97,8 +168,8 @@ async def _preview_bash(params: dict[str, Any]) -> str:
             lines.append("  ⚠ 无法启动 bash，跳过语法检查")
     else:
         lines.append(
-            "  ⚠ 未找到 bash，跳过语法检查（可在 PATH 中加入 Git Bash，"
-            "或设置 DESK_BASH_PATH 指向 bash.exe）"
+            "  ⚠ 未找到 bash，跳过语法检查（可将 Git Bash 加入 PATH、"
+            "设置 DESK_BASH_PATH，或确保 git 在 PATH 中以便自动推导安装位置）"
         )
     return _clip("\n".join(lines))
 

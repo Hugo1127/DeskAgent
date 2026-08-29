@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 
+import desk_agent.core.permissions.preview as preview_mod
 from desk_agent.core.permissions.manager import PermissionManager
 from desk_agent.core.permissions.policy import (
     PermissionDecision,
@@ -168,9 +170,54 @@ def test_preview_write_file_rejects_traversal() -> None:
 
 
 def test_find_bash_env_override(monkeypatch) -> None:
-    # DESK_BASH_PATH 指向不存在的文件时回退到 PATH 探测（无 bash 则 None）
+    # DESK_BASH_PATH 指向不存在的文件时，沿探测链回退（无 bash/git 则 None）
     monkeypatch.setenv("DESK_BASH_PATH", "C:/no/such/bash.exe")
-    if shutil.which("bash"):
-        assert _find_bash() == shutil.which("bash")
-    else:
-        assert _find_bash() is None
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr(preview_mod, "_GIT_BASH_CANDIDATES", ())
+    monkeypatch.setattr(preview_mod, "_GIT_BASH_RELATIVES", ())
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    assert _find_bash() is None
+
+
+def test_find_bash_via_git_exe_location(monkeypatch, tmp_path: Path) -> None:
+    # 非默认安装位置：git.exe 位于 <root>/mingw64/bin，bash 位于 <root>/bin
+    root = tmp_path / "Git"
+    (root / "bin").mkdir(parents=True)
+    (root / "bin" / "bash.exe").write_bytes(b"MZ")
+    (root / "mingw64" / "bin").mkdir(parents=True)
+    git = root / "mingw64" / "bin" / "git.exe"
+    git.write_bytes(b"MZ")
+
+    monkeypatch.setenv("DESK_BASH_PATH", "")
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda name: str(git) if name == "git" else None,
+    )
+    assert _find_bash() == str(root / "bin" / "bash.exe")
+
+
+def test_find_bash_via_git_exec_path_fallback(monkeypatch, tmp_path: Path) -> None:
+    # git 经 shim 调用（无法从可执行文件推导根目录），回退到 git --exec-path
+    root = tmp_path / "Git"
+    (root / "usr" / "bin").mkdir(parents=True)
+    (root / "usr" / "bin" / "bash.exe").write_bytes(b"MZ")
+    (root / "mingw64" / "libexec" / "git-core").mkdir(parents=True)
+    shim = tmp_path / "unrelated" / "git.exe"
+    shim.parent.mkdir(parents=True)
+    shim.write_bytes(b"MZ")
+
+    class FakeResult:
+        returncode = 0
+        stdout = str(root / "mingw64" / "libexec" / "git-core")
+
+    monkeypatch.setenv("DESK_BASH_PATH", "")
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr(
+        shutil,
+        "which",
+        lambda name: str(shim) if name == "git" else None,
+    )
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: FakeResult())
+    assert _find_bash() == str(root / "usr" / "bin" / "bash.exe")

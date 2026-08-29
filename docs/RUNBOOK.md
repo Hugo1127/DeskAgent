@@ -104,23 +104,23 @@ tail -f ~/.desk/logs/core.log
 
 ## 权限 dry-run 预览的 bash 依赖
 
-审批预览的 bash 语法检查（`bash -n`，只解析不执行）需要可执行的 bash。daemon 启动时按以下顺序探测：
+审批预览的 bash 语法检查（`bash -n`，只解析不执行）需要可执行的 bash。daemon 按以下顺序探测：
 
 1. `DESK_BASH_PATH` 环境变量（显式指定 bash.exe 路径）
 2. `PATH` 中的 `bash`
 3. Git for Windows 常见安装位置（`C:\Program Files\Git\bin\bash.exe` 等）
+4. 从 `PATH` 中的 `git` 可执行文件位置向上推导 Git 安装根目录（无需启动子进程）
+5. `git --exec-path` 输出推导安装根目录（最后兜底，覆盖 git 经 shim 调用的场景）
 
-Windows 上通常随 Git for Windows 自带 Git Bash；**若 Git 安装在非默认位置（如 `D:\Programs\Git`），自动探测会 miss**，预览提示「⚠ 未找到 bash，跳过语法检查」——此时决策链轨迹、危险特征提示、diff 预览仍正常，仅语法检查不可用。
+Windows 上通常随 Git for Windows 自带 Git Bash。即使 **Git 安装在非默认位置（如 `D:\Programs\Git`）**，只要 `git` 在 daemon 的 PATH 中，第 4/5 步会自动推导出安装根目录并找到其 `bin/bash.exe` 或 `usr/bin/bash.exe`，语法检查照常可用。
 
-**解决**：启动 daemon 时带上环境变量：
+**手动指定**（优先级最高）：启动 daemon 时带上环境变量：
 
 ```bash
 DESK_BASH_PATH="D:\Programs\Git\usr\bin\bash.exe" uv run desk-core
 ```
 
 或将 Git 的 `usr/bin` 加入系统 PATH 后重启 daemon。
-
-> **待办（后续处理）**：自动从 `git --exec-path` 推导 Git 安装根目录，覆盖非默认安装路径；可选：让 `BashTool` 在 Windows 上实际执行也走 Git Bash，使语法检查与真实执行环境一致。
 
 ---
 
@@ -132,4 +132,4 @@ DESK_BASH_PATH="D:\Programs\Git\usr\bin\bash.exe" uv run desk-core
 | `error: core not running (127.0.0.1:9986)` | 未启动守护进程 | `uv run desk-core` |
 | `Address already in use` | 端口被其他进程占用 | `DESK_PORT=9987 uv run desk-core` |
 | `Config error: DESK_PORT must be an integer` | `.env` 或环境变量中端口值非整数 | 检查 `DESK_PORT` 的值 |
-| 预览提示「未找到 bash，跳过语法检查」 | daemon 环境 PATH 无 bash，且 Git 装在非默认位置（自动探测 miss） | 见上文「权限 dry-run 预览的 bash 依赖」：设置 `DESK_BASH_PATH` 或加入系统 PATH 后重启 daemon |
+| 预览提示「未找到 bash，跳过语法检查」 | daemon 环境 PATH 无 bash，且 git 不在 PATH（自动推导失效） | 见上文「权限 dry-run 预览的 bash 依赖」：确认 `git` 在 daemon 的 PATH 中（可自动推导非默认安装位置），或设置 `DESK_BASH_PATH` / 加入系统 PATH 后重启 daemon |

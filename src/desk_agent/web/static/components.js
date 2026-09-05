@@ -128,9 +128,11 @@ export function permissionModal(perm, onDecision, onPreview) {
   } = perm;
   const choices = [
     ["allow_once", "Allow once", "allow"],
-    ["always_allow", "Always allow", "allow"],
+    ["always_allow", "Always allow (session)", "allow"],
+    ["always_allow_global", "Always allow (global)", "allow"],
     ["deny_once", "Deny", "deny"],
-    ["always_deny", "Always deny", "deny"],
+    ["always_deny", "Always deny (session)", "deny"],
+    ["always_deny_global", "Always deny (global)", "deny"],
   ];
 
   const previewArea = el("div", { class: "modal-preview-area" },
@@ -169,7 +171,8 @@ export function permissionModal(perm, onDecision, onPreview) {
         }, label),
       ),
     ),
-    el("div", { class: "modal-hint" }, "允许/拒绝仅作用于本次工具调用；always 会持久化到 policy.toml"),
+    el("div", { class: "modal-hint" },
+      "Allow/Deny 仅本次生效；session 作用于当前会话；global 持久化到 policy.toml 并跨会话生效"),
   );
   overlay.appendChild(dialog);
 

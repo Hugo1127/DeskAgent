@@ -11,8 +11,10 @@ from desk_agent.core.transport.socket_client import IpcError
 _DECISION_MAP: dict[str, str] = {
     "y": "allow_once",
     "a": "always_allow",
+    "A": "always_allow_global",
     "n": "deny_once",
     "d": "always_deny",
+    "D": "always_deny_global",
 }
 
 
@@ -47,7 +49,8 @@ class ChatPrinter:
             reason = str(event.get("decision_reason", ""))
             if reason:
                 print(f"  {reason}")
-            print("  y=allow once  a=always allow  n=deny once  d=always deny  p=preview")
+            print("  y=allow once  a=always allow (session)  A=always allow (global)")
+            print("  n=deny once  d=always deny (session)  D=always deny (global)  p=preview")
             self.pending_permission_id = tool_use_id
             self.pending_permission = {
                 "tool_use_id": tool_use_id,
@@ -131,10 +134,13 @@ async def _chat_async(config: DeskConfig) -> int:
                             print(f"  [preview] {result['reason']}")
                         print(result.get("preview_text", "(no preview available)"))
                     continue
-                decision = _DECISION_MAP.get(content.lower())
+                # 先按原始输入匹配（区分 A/D 的 global 决策），再回退到小写匹配
+                decision = _DECISION_MAP.get(content)
                 if decision is None:
-                    print("  enter y (allow once), a (always allow), "
-                          "n (deny once), d (always deny), p (preview)")
+                    decision = _DECISION_MAP.get(content.lower())
+                if decision is None:
+                    print("  enter y (allow once), a/A (always allow session/global), "
+                          "n (deny once), d/D (always deny session/global), p (preview)")
                     continue
                 tool_use_id = printer.pending_permission_id
                 printer.pending_permission_id = None

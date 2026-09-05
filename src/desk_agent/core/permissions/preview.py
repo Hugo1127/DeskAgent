@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -33,13 +34,7 @@ _DANGEROUS_HINTS: list[tuple[re.Pattern[str], str]] = [
 def _clip(text: str, limit: int = _MAX_PREVIEW_CHARS) -> str:
     return text if len(text) <= limit else text[:limit] + "\n…[preview truncated]"
 
-# Git for Windows 常见安装位置（daemon 的 PATH 未必包含 bash，预览时兜底探测）
-_GIT_BASH_CANDIDATES: tuple[str, ...] = (
-    r"C:\Program Files\Git\bin\bash.exe",
-    r"C:\Program Files (x86)\Git\bin\bash.exe",
-)
-
-# 相对 Git 安装根目录的 bash 候选路径（兼容不同安装布局）
+# 相对 Git 安装根目录的 bash 候选路径（Git for Windows 的不同安装布局）
 _GIT_BASH_RELATIVES: tuple[str, ...] = (
     "bin/bash.exe",
     "usr/bin/bash.exe",
@@ -52,23 +47,12 @@ def _bash_candidates_under(root: Path) -> list[str]:
     return [str(root / relative) for relative in _GIT_BASH_RELATIVES]
 
 
-def _git_root_from_git_exe(git: str) -> Path | None:
-    """从 git 可执行文件位置向上推导 Git 安装根目录（无需启动子进程）。"""
-    path = Path(git).resolve()
-    for _ in range(5):
-        if (path / "bin" / "bash.exe").is_file() or (
-            path / "usr" / "bin" / "bash.exe"
-        ).is_file():
-            return path
-        parent = path.parent
-        if parent == path:
-            break
-        path = parent
-    return None
-
-
 def _git_root_from_exec_path(git: str) -> Path | None:
-    """通过 `git --exec-path` 推导 Git 安装根目录（覆盖非默认安装位置）。"""
+    """通过 `git --exec-path` 推导 Git 安装根目录（覆盖非默认安装位置，如 D:\\Programs\\Git）。
+
+    仅用于 Git for Windows：在 Linux/macOS 下 bash 通常已在 PATH 中，
+    由 shutil.which("bash") 兜底，此函数无匹配时返回 None。
+    """
     try:
         result = subprocess.run(
             [git, "--exec-path"],
@@ -96,8 +80,9 @@ def _git_root_from_exec_path(git: str) -> Path | None:
     return None
 
 
-# 探测可用的 bash：优先 DESK_BASH_PATH 环境变量，其次 PATH，然后常见 Git 安装位置，
-# 最后从 git 可执行文件 / `git --exec-path` 推导非默认安装位置（如 D:\Programs\Git）
+# 探测可用的 bash：优先 DESK_BASH_PATH 环境变量，其次 PATH，
+# 最后通过 `git --exec-path` 推导 Git 安装根目录（如 D:\\Programs\\Git）。
+# `git --exec-path` 推导仅用于 Windows；Linux/macOS 下 bash 一般已在 PATH 中。
 def _find_bash() -> str | None:
     env_path = os.environ.get("DESK_BASH_PATH", "").strip()
     if env_path and Path(env_path).is_file():
@@ -105,21 +90,9 @@ def _find_bash() -> str | None:
     found = shutil.which("bash")
     if found:
         return found
-    local_appdata = os.environ.get("LOCALAPPDATA", "")
-    candidates = list(_GIT_BASH_CANDIDATES)
-    if local_appdata:
-        candidates.insert(
-            0, str(Path(local_appdata) / "Programs" / "Git" / "bin" / "bash.exe")
-        )
+    if sys.platform != "win32":
+        return None
     git = shutil.which("git")
-    if git:
-        root = _git_root_from_git_exe(git)
-        if root is not None:
-            candidates.extend(_bash_candidates_under(root))
-    for candidate in candidates:
-        if Path(candidate).is_file():
-            return candidate
-    # 最后兜底：git.exe 路径推导失败时（如经 shim 调用），走 git --exec-path
     if git:
         root = _git_root_from_exec_path(git)
         if root is not None:

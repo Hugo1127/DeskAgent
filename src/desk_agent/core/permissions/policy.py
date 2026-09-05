@@ -12,14 +12,18 @@ class PermissionDecision(StrEnum):
     ASK = "ask"
 
 
-# 检测 bash 命令是否操作 cwd 之外路径的正则规则列表（强制触发 ASK，不可被 allow_patterns 绕过）
+# 检测 bash 命令是否操作 cwd 之外路径的正则规则列表（强制触发 ASK，不可被 allow_patterns 绕过）。
+# 跨平台：同时覆盖 Unix 绝对路径 /、Windows 盘符 C:\、UNC 共享 \\server\share，以及两侧环境变量。
 OUTSIDE_CWD_HEURISTICS: list[str] = [
-    r"(^|\s)/[^\s]",              # absolute path
-    r"(^|\s)~",                   # tilde home
-    r"(^|\s)\.\.(/|$|\s)",        # parent traversal
-    r"\$\{?HOME\b",               # $HOME variable
-    r"\$\{?PWD\b",                # $PWD variable
-    r"(^|\s|;|&&|\|\|)cd(\s|$)",  # explicit cd
+    r"(^|\s)/[^\s]",                    # Unix 绝对路径（/etc/passwd、/tmp/x）
+    r"(^|\s)[A-Za-z]:[\\/]",            # Windows 盘符绝对路径（C:\、D:/）
+    r"(^|\s)\\\\[^\s]",                 # Windows UNC 共享路径（\\server\share）
+    r"(^|\s)~",                         # tilde home
+    r"(^|\s)\.\.([\\/]|$|\s)",          # 父目录穿越（../ 或 ..\）
+    r"\$\{?HOME\b",                     # $HOME / ${HOME}
+    r"\$\{?PWD\b",                      # $PWD / ${PWD}
+    r"%[A-Z_][A-Z0-9_]+%",              # Windows 环境变量（%USERPROFILE%、%APPDATA%、%CD%）
+    r"(^|\s|;|&&|\|\|)cd(\s|$)",        # explicit cd
 ]
 
 _OUTSIDE_CWD_RE: list[re.Pattern[str]] = [re.compile(p) for p in OUTSIDE_CWD_HEURISTICS]
@@ -45,10 +49,29 @@ class PolicyTrace:
     tier: str
     matched_rule: str = ""
     reason: str = ""
+    # 安全屏障（deny_pattern / outside_cwd）为 False：不可被 session/global 缓存覆盖；
+    # 策略层（allow_pattern / default / unknown tool）为 True：可被缓存覆盖。
+    bypassable_by_cache: bool = True
 
+
+# bash 命令级黑名单（deny_patterns）：命中后强制 ASK，优先级高于 policy.toml，
+# 不可被 session/global 缓存绕过。以下是跨平台示例，可按需在代码里编辑。
+_BASH_DENY_PATTERNS: list[str] = [
+    r"(^|\s)rm\s+-[^\s]*r[^\s]*f",      # rm -rf / rm -fr（Linux/macOS 递归强制删除）
+    r"(^|\s)rmdir\s+/s(?:\s|$)",        # rmdir /s（Windows 递归删除目录）
+    r"(^|\s)rd\s+/s(?:\s|$)",           # rd /s（Windows 递归删除目录）
+    r"(^|\s)del\s+/[fq](?:\s|$)",       # del /f /q（Windows 强制删除）
+    r"(^|\s)format\s+[a-zA-Z]:",        # format C:（Windows 格式化磁盘）
+    r"(^|\s)(?:mkfs|fdisk|dd)(?:\s|\.)",  # mkfs.*/fdisk/dd（Linux 磁盘/块设备操作）
+    r"(^|\s)shutdown(?:\s|$)",          # shutdown（Windows/Linux 关机）
+    r"(^|\s)reg\s+delete(?:\s|$)",      # reg delete（Windows 注册表删除）
+]
 
 DEFAULT_POLICIES: dict[str, ToolPolicy] = {
-    "bash":       ToolPolicy(default=PermissionDecision.ASK),
+    "bash": ToolPolicy(
+        default=PermissionDecision.ASK,
+        deny_patterns=list(_BASH_DENY_PATTERNS),
+    ),
     "write_file": ToolPolicy(default=PermissionDecision.ASK),
     "read_file":  ToolPolicy(default=PermissionDecision.ALLOW),
     "read_image": ToolPolicy(default=PermissionDecision.ALLOW),
@@ -104,15 +127,16 @@ def trace_evaluate(
 
     command = str(params.get("command", "")) if tool_name == "bash" else ""
 
-    # Tier 1: deny_patterns (bash only)
+    # Tier 1: deny_patterns (bash only) — 黑名单命中强制 ASK，不可被缓存/toml 绕过
     if command:
         for pat in policy.deny_patterns:
             if re.search(pat, command):
                 return PolicyTrace(
-                    decision=PermissionDecision.DENY,
+                    decision=PermissionDecision.ASK,
                     tier="tier1_deny_pattern",
                     matched_rule=f"deny_pattern: {pat}",
-                    reason="命中 deny_patterns 黑名单，直接拒绝",
+                    reason="命中 deny_patterns 黑名单，强制询问，不可被缓存或 policy.toml 绕过",
+                    bypassable_by_cache=False,
                 )
 
     # Tier 2: OUTSIDE_CWD_HEURISTICS — forced ASK, not bypassable
@@ -122,6 +146,7 @@ def trace_evaluate(
             tier="tier2_outside_cwd",
             matched_rule="outside-cwd heuristic",
             reason="bash 命令疑似操作工作目录之外路径，强制询问",
+            bypassable_by_cache=False,
         )
 
     # Tier 3: allow_patterns (bash only)

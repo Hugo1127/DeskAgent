@@ -155,16 +155,20 @@ class PermissionSelect(Static):
     """
 
     _CHOICES: tuple[tuple[str, str, str], ...] = (
-        ("allow_once",   "Allow once",   "y / 1"),
-        ("always_allow", "Always allow", "a / 2"),
-        ("deny_once",    "Deny",         "n / 3"),
-        ("always_deny",  "Always deny",  "d / 4"),
+        ("allow_once",         "Allow once",          "y / 1"),
+        ("always_allow",       "Always allow",        "a / 2"),
+        ("always_allow_global","Always allow (global)","A / 3"),
+        ("deny_once",          "Deny",                "n / 4"),
+        ("always_deny",        "Always deny",         "d / 5"),
+        ("always_deny_global", "Always deny (global)", "D / 6"),
     )
     _KEY_MAP: dict[str, str] = {
-        "y": "allow_once",  "1": "allow_once",
-        "a": "always_allow","2": "always_allow",
-        "n": "deny_once",   "3": "deny_once",
-        "d": "always_deny", "4": "always_deny",
+        "y": "allow_once",          "1": "allow_once",
+        "a": "always_allow",        "2": "always_allow",
+        "A": "always_allow_global", "3": "always_allow_global",
+        "n": "deny_once",           "4": "deny_once",
+        "d": "always_deny",         "5": "always_deny",
+        "D": "always_deny_global",  "6": "always_deny_global",
     }
 
     # 用户作出权限决策时发布，携带工具 ID 和决策字符串
@@ -270,11 +274,13 @@ class PermissionBlock(Static):
     """日志里的权限审批摘要"""
 
     _LABEL_MAP: dict[str, str] = {
-        "allow_once":   "allowed (once)",
-        "always_allow": "always allowed",
-        "deny_once":    "denied",
-        "always_deny":  "always denied",
-        "timeout":      "⏱ timed out",
+        "allow_once":          "allowed (once)",
+        "always_allow":        "always allowed (session)",
+        "always_allow_global": "always allowed (global)",
+        "deny_once":           "denied",
+        "always_deny":         "always denied (session)",
+        "always_deny_global":  "always denied (global)",
+        "timeout":             "⏱ timed out",
     }
     LABEL_MAP = _LABEL_MAP
 
@@ -318,7 +324,7 @@ class PermissionBlock(Static):
         if self._resolved:
             return
         self._resolved = True
-        allowed = decision in ("allow_once", "always_allow")
+        allowed = decision in ("allow_once", "always_allow", "always_allow_global")
         icon = "[bold green]✓[/bold green]" if allowed else "[bold red]✗[/bold red]"
         label = self._LABEL_MAP.get(decision, decision)
         preview = f"  [dim]{self._param_preview}[/dim]" if self._param_preview else ""

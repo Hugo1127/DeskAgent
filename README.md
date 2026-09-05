@@ -9,7 +9,7 @@ DeskAgent 是一个**本地 AI Agent 运行时**（mini 版 Claude Code）：以
 - **守护进程 + 多客户端**：`desk-core` 常驻后台，CLI / TUI 多客户端接入，断开不中断执行、重连可恢复订阅
 - **ReAct AgentLoop**：plan → act → observe 迭代闭环，支持思考、多步执行、max_steps 兜底
 - **类型化事件流**：Pydantic v2 定义命令与事件，EventBus 驱动，每次 run 落盘 `events.jsonl` 支持回放
-- **四级权限审批 + dry-run 预览**：`allow_once / always_allow / deny_once / always_deny`，bash 越界路径强制 ASK，决策持久化到 `policy.toml`；审批前可一键预览决策链轨迹与只读工具副作用（bash 语法检查 / write_file diff），不执行、不落盘
+- **分级权限审批（单次 / 会话 / 全局）+ dry-run 预览**：`allow_once / deny_once`、`always_allow / always_deny`（会话内）、`always_allow_global / always_deny_global`（全局），deny_patterns 黑名单与 bash 越界路径强制 ASK 且不可被缓存绕过，全局决策持久化到 `policy.toml`；审批前可一键预览决策链轨迹与只读工具副作用（bash 语法检查 / write_file diff），不执行、不落盘
 - **会话记忆 + 上下文治理**：Session / notes 分层延续上下文，水位检测、tool_result 截断、自动/手动压缩（`/compact`）
 - **Skills**：Markdown front-matter 定义行为预设与工具白名单，三级查找覆盖，无需改代码扩展
 - **子 Agent + MCP**：`spawn_agent` 前台/后台编排、事件桥接；MCP 客户端支持 stdio / TCP 接入外部工具
@@ -143,7 +143,7 @@ port = 9987            # desk-web 端口（默认 9987，可用 DESK_WEB_PORT �
 | `task_create` / `task_update` / `task_list` / `task_get` | 子任务管理 | 询问 |
 | `spawn_agent` / `agent_result` | 派生子 Agent / 获取后台结果 | 询问 |
 
-权限评估采用**静态策略分层**：deny_patterns → bash 越界路径启发式（不可绕过）→ session 级缓存 → 持久化缓存 → allow_patterns → 工具默认策略；命中 ASK 时推送事件给客户端，`always_allow` / `always_deny` 持久化到 `~/.desk/policy.toml`。
+权限评估采用**静态策略分层**：deny_patterns（黑名单，命中强制 ASK，优先于 toml，不可绕过）→ bash 越界路径启发式（命中强制 ASK，不可绕过）→ session 级缓存 → 全局缓存（policy.toml）→ allow_patterns → 工具默认策略；命中 ASK 时推送事件给客户端，会话级 `always_allow` / `always_deny` 仅当前 session 生效，全局级 `always_allow_global` / `always_deny_global` 持久化到 `~/.desk/policy.toml` 并跨会话生效。黑名单与越界路径规则见 `src/desk_agent/core/permissions/policy.py`（跨平台：Unix / Windows 盘符 / UNC / 两侧环境变量）。
 
 审批前支持 **dry-run 预览**（CLI chat 按 `p`，TUI 按 `p`，Web 审批弹窗点 Dry-run preview）：返回真实决策链轨迹（命中层级 / 规则 / 原因）与只读副作用预览——bash 仅做 `bash -n` 语法检查与静态危险标注（绝不执行命令）、write_file 展示新旧内容 diff、文件类工具展示 stat 元数据；预览不执行、不写入、不注册审批、不落盘。
 

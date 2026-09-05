@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,8 +12,8 @@ from desk_agent.core.permissions.policy import (
     PermissionDecision,
     PolicyTrace,
     ToolPolicy,
-    matches_outside_cwd,
     param_preview,
+    trace_evaluate,
 )
 from desk_agent.core.permissions.preview import preview_tool
 from desk_agent.core.permissions.storage import load_policy_file, save_policy_file
@@ -52,43 +51,23 @@ class PermissionManager:
         # 0 表示不超时
         self._timeout_s = timeout_s
 
-    # 对工具名 + 参数执行 4 层静态评估，不挂起
-    def evaluate(self, tool_name: str, params: dict[str, Any]) -> PermissionDecision:
-        from desk_agent.core.permissions.policy import evaluate
-        policy = self._policies.get(tool_name)
-        return evaluate(tool_name, params, policy)
-
-    # 复现 check_and_wait 的完整决策链（含 session/持久化缓存），返回带命中规则的轨迹
+    # 复现 check_and_wait 的完整决策链（含 session/持久化缓存），返回带命中规则的轨迹。
+    # 静态评估只复用 trace_evaluate 一处；安全屏障（bypassable_by_cache=False）不可被缓存绕过。
     def _trace(
         self,
         tool_name: str,
         params: dict[str, Any],
         session_id: str,
     ) -> PolicyTrace:
-        command = str(params.get("command", "")) if tool_name == "bash" else ""
         policy = self._policies.get(tool_name)
+        result = trace_evaluate(tool_name, params, policy)
 
-        # Tier 1: deny_patterns（bash only，不可被缓存绕过）
-        if command and policy:
-            for pat in policy.deny_patterns:
-                if re.search(pat, command):
-                    return PolicyTrace(
-                        decision=PermissionDecision.DENY,
-                        tier="tier1_deny_pattern",
-                        matched_rule=f"deny_pattern: {pat}",
-                        reason="命中 deny_patterns 黑名单，直接拒绝，不可被缓存绕过",
-                    )
+        # 安全屏障：deny_pattern(ASK) 和 outside_cwd(ASK) 在此拦截，
+        # 不可被 session/global 缓存绕过。default=DENY 的 bypassable=True 不在此拦截。
+        if not result.bypassable_by_cache:
+            return result
 
-        # Tier 2: OUTSIDE_CWD_HEURISTICS（bash only，强制 ASK，不可被任何缓存绕过）
-        if command and matches_outside_cwd(command):
-            return PolicyTrace(
-                decision=PermissionDecision.ASK,
-                tier="tier2_outside_cwd",
-                matched_rule="outside-cwd heuristic",
-                reason="bash 命令疑似操作工作目录之外路径，强制询问，不可被缓存绕过",
-            )
-
-        # Tier 3: session always 缓存
+        # Tier 3: session 级缓存（内存，仅当前 session）
         session_key = (session_id, tool_name)
         if session_key in self._session_always:
             cached = self._session_always[session_key]
@@ -100,9 +79,10 @@ class PermissionManager:
                 tier="tier3_session_cache",
                 matched_rule=f"session cache: {cached}",
                 reason=f"本 session 已有 always_{cached} 决策缓存",
+                bypassable_by_cache=True,
             )
 
-        # Tier 4: persistent always（跨 session）
+        # Tier 4: global 级缓存（policy.toml）
         if tool_name in self._persistent_always:
             cached = self._persistent_always[tool_name]
             return PolicyTrace(
@@ -113,41 +93,10 @@ class PermissionManager:
                 tier="tier4_persistent_cache",
                 matched_rule=f"policy.toml always: {cached}",
                 reason=f"policy.toml 已持久化 always_{cached}",
+                bypassable_by_cache=True,
             )
 
-        # Tier 5: allow_patterns（bash only）
-        if command and policy:
-            for pat in policy.allow_patterns:
-                if re.search(pat, command):
-                    return PolicyTrace(
-                        decision=PermissionDecision.ALLOW,
-                        tier="tier5_allow_pattern",
-                        matched_rule=f"allow_pattern: {pat}",
-                        reason="命中 allow_patterns 白名单，自动放行",
-                    )
-
-        # Tier 6: tool default
-        if policy is not None:
-            if policy.default == PermissionDecision.ALLOW:
-                return PolicyTrace(
-                    decision=PermissionDecision.ALLOW,
-                    tier="tier6_default",
-                    matched_rule="tool default: allow",
-                    reason="工具默认策略为 allow，自动放行",
-                )
-            if policy.default == PermissionDecision.DENY:
-                return PolicyTrace(
-                    decision=PermissionDecision.DENY,
-                    tier="tier6_default",
-                    matched_rule="tool default: deny",
-                    reason="工具默认策略为 deny，自动拒绝",
-                )
-        return PolicyTrace(
-            decision=PermissionDecision.ASK,
-            tier="tier6_default",
-            matched_rule="tool default: ask / unknown tool",
-            reason="工具默认策略为 ask 或未登记工具，需要人工审批",
-        )
+        return result
 
     # 检查权限；如需 ask 则向客户端发事件并等待响应；返回 (allowed, decision_str)
     async def check_and_wait(
@@ -170,7 +119,7 @@ class PermissionManager:
             )
             return False, "auto_deny"
 
-        # ASK 路径（来自 OUTSIDE_CWD 强制 ASK，或 default=ASK）
+        # ASK 路径（来自 deny_pattern / outside_cwd 强制 ASK，或 default=ASK）
         loop = asyncio.get_event_loop()
         future: asyncio.Future[str] = loop.create_future()
         self._pending[tool_use_id] = _PendingRequest(
@@ -237,34 +186,18 @@ class PermissionManager:
         if not req.future.done():
             req.future.set_result(decision)
 
-    # 应用审批决策，更新 session + persistent 缓存，返回是否放行
+    # 应用审批决策，分级写入缓存，返回是否放行。
+    # allow_once/deny_once 不写缓存；always_allow/always_deny 只写 session；
+    # always_allow_global/always_deny_global 只写 persistent + 落盘
+    # （不写 session，避免删除 toml 条目后残留）。
     def _apply_response(self, decision: str, session_id: str, tool_name: str) -> bool:
-        allow = decision in ("allow_once", "always_allow")
-        if decision == "always_allow":
-            self._session_always[(session_id, tool_name)] = "allow"
-            self._persistent_always[tool_name] = "allow"
-            logger.info(
-                "permission: always allow tool=%s policy_file=%s persistent=%s",
-                tool_name, self._policy_file, self._persistent_always,
-            )
-            if self._policy_file is not None:
-                try:
-                    save_policy_file(self._persistent_always, self._policy_file)
-                    logger.info("permission: policy.toml written path=%s", self._policy_file)
-                except Exception:
-                    logger.exception(
-                        "permission: failed to write policy.toml path=%s",
-                        self._policy_file,
-                    )
-            else:
-                logger.warning("permission: policy_file is None, skipping persistence")
-        elif decision == "always_deny":
-            self._session_always[(session_id, tool_name)] = "deny"
-            self._persistent_always[tool_name] = "deny"
-            logger.info(
-                "permission: always deny tool=%s policy_file=%s persistent=%s",
-                tool_name, self._policy_file, self._persistent_always,
-            )
+        allow = decision in ("allow_once", "always_allow", "always_allow_global")
+        if decision in ("always_allow", "always_deny"):
+            verdict = "allow" if decision == "always_allow" else "deny"
+            self._session_always[(session_id, tool_name)] = verdict
+        elif decision in ("always_allow_global", "always_deny_global"):
+            verdict = "allow" if decision == "always_allow_global" else "deny"
+            self._persistent_always[tool_name] = verdict
             if self._policy_file is not None:
                 try:
                     save_policy_file(self._persistent_always, self._policy_file)

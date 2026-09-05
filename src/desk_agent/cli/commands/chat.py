@@ -49,6 +49,10 @@ class ChatPrinter:
             reason = str(event.get("decision_reason", ""))
             if reason:
                 print(f"  {reason}")
+            tier = str(event.get("tier", ""))
+            if tier in ("tier1_deny_pattern", "tier2_outside_cwd"):
+                print("  ⚠ 安全屏障：黑名单 / 越界路径，需显式审批"
+                      "（缓存与 policy.toml 放行不生效）")
             print("  y=allow once  a=always allow (session)  A=always allow (global)")
             print("  n=deny once  d=always deny (session)  D=always deny (global)  p=preview")
             self.pending_permission_id = tool_use_id

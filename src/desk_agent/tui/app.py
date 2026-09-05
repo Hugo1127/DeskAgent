@@ -188,10 +188,18 @@ class PermissionSelect(Static):
             self.tool_use_id = tool_use_id
             super().__init__()
 
-    # 初始化控件，存储工具 ID（用于 IPC 回复）
-    def __init__(self, tool_use_id: str) -> None:
+    # 初始化控件，存储工具 ID（用于 IPC 回复）与命中层级（用于安全屏障提示）
+    def __init__(
+        self,
+        tool_use_id: str,
+        *,
+        tier: str = "",
+        decision_reason: str = "",
+    ) -> None:
         super().__init__("")
         self._tool_use_id = tool_use_id
+        self._tier = tier
+        self._decision_reason = decision_reason
         self._cursor = 0
 
     def on_mount(self) -> None:
@@ -227,12 +235,21 @@ class PermissionSelect(Static):
     # 生成带光标高亮的选项列表文本
     def _render_ui(self) -> str:
         lines: list[str] = []
+        forced = self._tier in ("tier1_deny_pattern", "tier2_outside_cwd")
+        if forced:
+            lines.append(
+                "[bold red]  ⚠ 安全屏障：黑名单 / 越界路径，需显式审批"
+                "（缓存与 policy.toml 放行不生效）[/bold red]"
+            )
         for i, (_, label, key_hint) in enumerate(self._CHOICES):
             if i == self._cursor:
                 lines.append(f"  [bold cyan]❯ {label}[/bold cyan]  [dim]{key_hint}[/dim]")
             else:
                 lines.append(f"    {label}  [dim]{key_hint}[/dim]")
-        lines.append("[dim]  ↑↓ navigate   enter confirm   p preview[/dim]")
+        lines.append(
+            "[dim]  ↑↓ navigate   enter confirm   p preview"
+            "   session=当前会话   global=跨会话[/dim]"
+        )
         return "\n".join(lines)
 
     # 方向键导航；快捷键直接选择；enter 确认光标位置
@@ -1103,7 +1120,11 @@ class DeskTuiApp(App[None]):
                 prompt.disabled = True
                 prompt.border_title = "permission required"
             self._append(perm_block)
-            select = PermissionSelect(tool_use_id)
+            select = PermissionSelect(
+                tool_use_id,
+                tier=str(event.get("tier") or ""),
+                decision_reason=str(event.get("decision_reason") or ""),
+            )
             self._mount_permission_select(select)
             log.debug(
                 "PermissionSelect mounted before #prompt  pending=%d",

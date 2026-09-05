@@ -494,6 +494,13 @@ code,
   font-size: 12px;
   word-break: break-word;
 }
+.modal-forced {
+  margin-bottom: 10px;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+  word-break: break-word;
+}
 .modal-tier {
   font-family: var(--mono);
   background: var(--bg);

@@ -126,6 +126,7 @@ export function permissionModal(perm, onDecision, onPreview) {
     tier,
     decision_reason: decisionReason,
   } = perm;
+  const forced = tier === "tier1_deny_pattern" || tier === "tier2_outside_cwd";
   const choices = [
     ["allow_once", "Allow once", "allow"],
     ["always_allow", "Always allow (session)", "allow"],
@@ -158,6 +159,8 @@ export function permissionModal(perm, onDecision, onPreview) {
       el("span", { class: "modal-tier" }, tier),
       decisionReason ? "  " + decisionReason : "",
     ) : null,
+    forced ? el("div", { class: "modal-forced" },
+      "⚠ 命中安全屏障（黑名单 / 越界路径），必须显式审批；缓存与 policy.toml 放行不生效") : null,
     params && Object.keys(params).length
       ? el("pre", { class: "modal-params" }, formatJson(params))
       : null,
@@ -172,7 +175,10 @@ export function permissionModal(perm, onDecision, onPreview) {
       ),
     ),
     el("div", { class: "modal-hint" },
-      "Allow/Deny 仅本次生效；session 作用于当前会话；global 持久化到 policy.toml 并跨会话生效"),
+      el("div", {}, "once — 仅本次调用"),
+      el("div", {}, "session — 当前会话内记住"),
+      el("div", {}, "global — 写入 policy.toml，跨会话生效"),
+    ),
   );
   overlay.appendChild(dialog);
 

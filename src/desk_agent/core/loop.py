@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from desk_agent.core.bus.events import StepFinishedEvent, StepStartedEvent
@@ -11,6 +10,7 @@ from desk_agent.core.events.bus import EventBus
 from desk_agent.core.llm.base import LLMProvider
 from desk_agent.core.tools.invocation import invoke_tool
 from desk_agent.core.tools.registry import ToolRegistry
+from desk_agent.core.utils import now_utc as _now
 
 if TYPE_CHECKING:
     from desk_agent.core.compact.compactor import Compactor
@@ -18,10 +18,6 @@ if TYPE_CHECKING:
 
 
 log = logging.getLogger(__name__)
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
-
 
 class AgentLoop:
     # 初始化循环所需依赖：LLM provider、工具注册表、事件总线，
@@ -73,7 +69,7 @@ class AgentLoop:
                 context.mark_failed("cancelled")
                 raise
             except Exception:
-                logging.getLogger(__name__).exception(
+                log.exception(
                     "LLM call failed run_id=%s step=%d", context.run_id, context.step
                 )
                 context.mark_failed("llm_error")

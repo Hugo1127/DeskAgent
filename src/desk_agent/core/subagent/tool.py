@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -25,16 +24,13 @@ from desk_agent.core.tools.builtin.task_list import TaskListTool
 from desk_agent.core.tools.builtin.task_update import TaskUpdateTool
 from desk_agent.core.tools.builtin.write_file import WriteFileTool
 from desk_agent.core.tools.registry import ToolRegistry
+from desk_agent.core.utils import now_utc as _now
 
 if TYPE_CHECKING:
     from desk_agent.core.llm.base import LLMProvider
     from desk_agent.core.permissions.manager import PermissionManager
 
 _profile_loader = AgentProfileLoader()
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class SpawnAgentParams(BaseModel):

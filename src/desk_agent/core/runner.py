@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 
 from desk_agent.core.bus.events import RunFinishedEvent, RunStartedEvent
@@ -40,10 +39,7 @@ from desk_agent.core.tools.builtin import (
 from desk_agent.core.tools.registry import ToolRegistry
 from desk_agent.core.trace.provider import TracingProvider
 from desk_agent.core.trace.writer import TraceWriter
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+from desk_agent.core.utils import now_utc as _now
 
 
 @dataclass
@@ -121,7 +117,7 @@ class AgentRunner:
             if _ok(note_tool.name):
                 registry.register(note_tool)
         if provider is not None and bus is not None and run_id is not None:
-            runs_dir = child_runs_dir or self._runs_dir
+            effective_runs_dir = child_runs_dir or self._runs_dir
             if _ok("spawn_agent"):
                 registry.register(
                     SpawnAgentTool(
@@ -131,7 +127,7 @@ class AgentRunner:
                         permission_manager=self._permission_manager,
                         max_steps=self._config.agent.max_steps,
                         task_registry=self._task_registry,
-                        runs_dir=runs_dir,
+                        runs_dir=effective_runs_dir,
                         session_id=session_id,
                         depth=0,
                     )

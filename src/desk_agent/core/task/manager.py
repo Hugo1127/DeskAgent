@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 
 from desk_agent.core.task.model import Task, TaskStatus
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+from desk_agent.core.utils import now_utc as _now
 
 
 class TaskManager:

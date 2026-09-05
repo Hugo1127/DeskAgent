@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import UTC, datetime
 from typing import Any
 
 import anthropic
@@ -12,6 +11,7 @@ import httpx
 from desk_agent.core.bus.events import LlmModelSelectedEvent, LlmTokenEvent, LlmUsageEvent
 from desk_agent.core.events.bus import EventBus
 from desk_agent.core.llm.types import LlmResponse, ToolCallBlock, UsageStats
+from desk_agent.core.utils import now_utc as _now
 
 _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "claude-sonnet-4-6": 200_000,
@@ -37,11 +37,6 @@ _SYSTEM_PROMPT = (
     "系统关键路径受白名单保护，绝不触碰；所有操作留痕、可审计。\n"
     "使用可用工具完成用户目标。目标完全达成后，给出最终答复，不要再调用任何工具。"
 )
-
-
-# 返回当前 UTC 时间的 ISO 8601 字符串
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class AnthropicProvider:

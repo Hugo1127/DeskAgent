@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from desk_agent.core.bus.events import ContextCompactedEvent
 from desk_agent.core.events.bus import EventBus
 from desk_agent.core.llm.image_blocks import estimate_image_tokens, image_block_placeholder
+from desk_agent.core.utils import now_utc as _now
 
 if TYPE_CHECKING:
     from desk_agent.core.context import ExecutionContext
@@ -49,11 +50,6 @@ Be concise. Omit reasoning steps and intermediate attempts. Keep conclusions.\
 # 返回当前 UTC 时间的简短时间戳字符串（用于文件名）
 def _ts_compact() -> str:
     return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-
-
-# 返回当前 UTC 时间的 ISO 8601 字符串
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 @dataclass

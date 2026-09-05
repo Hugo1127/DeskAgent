@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from desk_agent.core.bus.envelope import HandlerError
@@ -20,6 +19,7 @@ from desk_agent.core.runs import new_run_id
 from desk_agent.core.session.model import Session, SessionMode
 from desk_agent.core.session.store import SessionStore
 from desk_agent.core.skills.loader import SkillLoader
+from desk_agent.core.utils import now_utc as _now
 
 if TYPE_CHECKING:
     from desk_agent.core.llm.base import LLMProvider
@@ -28,11 +28,6 @@ if TYPE_CHECKING:
 SESSION_NOT_FOUND = -32010
 SESSION_CLOSED = -32011
 SESSION_BUSY = -32012
-
-
-# 返回当前 UTC 时间的 ISO 8601 字符串
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class SessionManager:

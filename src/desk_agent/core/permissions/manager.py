@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import logging
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -20,12 +18,9 @@ from desk_agent.core.permissions.policy import (
 )
 from desk_agent.core.permissions.preview import preview_tool
 from desk_agent.core.permissions.storage import load_policy_file, save_policy_file
+from desk_agent.core.utils import now_utc as _now
 
 logger = logging.getLogger(__name__)
-
-
-def _now() -> str:
-    return datetime.datetime.now(UTC).isoformat()
 
 
 @dataclass

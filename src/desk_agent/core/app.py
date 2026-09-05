@@ -10,7 +10,6 @@ import signal
 import sys
 import threading
 import time
-from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +56,7 @@ from desk_agent.core.trace.writer import TraceWriter
 from desk_agent.core.transport import runfile, tls
 from desk_agent.core.transport.ipc_broadcaster import IpcEventBroadcaster
 from desk_agent.core.transport.socket_server import SocketServer, get_connection_writer
+from desk_agent.core.utils import now_utc as _now
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +64,6 @@ logger = logging.getLogger(__name__)
 # 关闭流程的超时上限：超过则强制退出，防止 asyncio/Windows Proactor 收尾竞态导致进程永不退出
 # 正常关闭各步均有限时，最坏路径（多 MCP 客户端 + 运行中任务）约 12s，故取 15s 留余量
 _SHUTDOWN_WATCHDOG_S = 15.0
-
-
-def _now() -> str:
-    return datetime.datetime.now(UTC).isoformat()
 
 
 def _watchdog_force_exit() -> None:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import time
-from datetime import UTC, datetime
 from typing import Any
 
 from desk_agent.core.events.bus import EventBus
@@ -11,10 +10,7 @@ from desk_agent.core.llm.image_blocks import image_block_placeholder
 from desk_agent.core.llm.types import LlmResponse
 from desk_agent.core.trace.record import TraceRecord
 from desk_agent.core.trace.writer import TraceWriter
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+from desk_agent.core.utils import now_utc as _now
 
 
 # 递归脱敏 content blocks：任意层级（顶层 user content 或 tool_result 内）的 image 块

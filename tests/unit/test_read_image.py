@@ -4,6 +4,8 @@ import asyncio
 import base64
 from pathlib import Path
 
+import pytest
+
 import desk_agent.core.llm.image_blocks as image_blocks_mod
 from desk_agent.core.compact.budget import truncate_tool_results
 from desk_agent.core.compact.compactor import _estimate_tokens, _messages_to_text
@@ -16,63 +18,76 @@ from desk_agent.core.llm.image_blocks import (
 from desk_agent.core.tools.builtin.read_file import ReadFileTool
 from desk_agent.core.tools.builtin.read_image import ReadImageTool
 
-# 测试夹具：项目内真实 JPEG 图片（只读，无临时文件写入）
-_IMG = Path(__file__).resolve().parent.parent.parent / "workspace" / "1.jpg"
-_TXT = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
+# 测试图片用 base64 内联生成，不依赖仓库中的磁盘图片文件（CI 可稳定运行）
+_JPEG_BYTES = base64.b64decode(
+    "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q=="
+)
+_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
 
 
 def _invoke(tool, params: dict[str, object]):
     return asyncio.run(tool.invoke(params))
 
 
+# 夹具：隔离目录内生成 1.jpg（内联 JPEG 字节），并把 cwd 切到该目录
+@pytest.fixture
+def image_dir(tmp_path: Path, monkeypatch) -> Path:
+    (tmp_path / "1.jpg").write_bytes(_JPEG_BYTES)
+    (tmp_path / "1.png").write_bytes(_PNG_BYTES)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
 # ---------- read_image 工具 ----------
 
 
-def test_read_image_returns_image_block():
-    assert _IMG.is_file()
-
-    result = _invoke(ReadImageTool(), {"path": str(_IMG)})
+def test_read_image_returns_image_block(image_dir: Path) -> None:
+    result = _invoke(ReadImageTool(), {"path": "1.jpg"})
 
     assert result.is_error is False
     assert isinstance(result.content, list)
     assert len(result.content) == 2
     text_block, image_block = result.content
     assert text_block["type"] == "text"
-    assert str(_IMG) in text_block["text"]
+    assert "1.jpg" in text_block["text"]
     assert image_block["type"] == "image"
     source = image_block["source"]
     assert source["type"] == "base64"
     assert source["media_type"] == "image/jpeg"
-    assert base64.b64decode(source["data"]) == _IMG.read_bytes()
+    assert base64.b64decode(source["data"]) == _JPEG_BYTES
 
 
-def test_read_image_missing_file():
-    result = _invoke(ReadImageTool(), {"path": str(_IMG.parent / "nope.png")})
+def test_read_image_missing_file(image_dir: Path) -> None:
+    result = _invoke(ReadImageTool(), {"path": "nope.png"})
     assert result.is_error is True
     assert isinstance(result.content, str)
     assert "不存在" in result.content
 
 
-def test_read_image_unsupported_format():
+def test_read_image_unsupported_format(image_dir: Path) -> None:
     # 存在的非图片文件（.toml）
-    result = _invoke(ReadImageTool(), {"path": str(_TXT)})
+    (image_dir / "notes.toml").write_text("x = 1", encoding="utf-8")
+    result = _invoke(ReadImageTool(), {"path": "notes.toml"})
     assert result.is_error is True
     assert isinstance(result.content, str)
     assert "不支持的图片格式" in result.content
 
 
-def test_read_image_oversize(monkeypatch):
-    # 不写大文件：把大小上限临时调小，用真实图片触发超限
+def test_read_image_oversize(image_dir: Path, monkeypatch) -> None:
+    # 不写大文件：把大小上限临时调小，用内联小图片触发超限
+    (image_dir / "big.jpg").write_bytes(b"x" * 100)
     monkeypatch.setattr(image_blocks_mod, "MAX_IMAGE_BYTES", 10)
-    result = _invoke(ReadImageTool(), {"path": str(_IMG)})
+    result = _invoke(ReadImageTool(), {"path": "big.jpg"})
     assert result.is_error is True
     assert isinstance(result.content, str)
     assert "大小上限" in result.content
 
 
-def test_read_image_ignores_extra_params():
+def test_read_image_ignores_extra_params(image_dir: Path) -> None:
     # extra="ignore"：多余参数不报 schema 错，仍走路径校验
-    result = _invoke(ReadImageTool(), {"path": "definitely-missing.png", "extra": 1})
+    result = _invoke(ReadImageTool(), {"path": "nope.png", "extra": 1})
     assert result.is_error is True
     assert "不存在" in result.content
 
@@ -80,14 +95,17 @@ def test_read_image_ignores_extra_params():
 # ---------- read_file 定位：图片提示 ----------
 
 
-def test_read_file_hints_read_image_for_images():
-    result = _invoke(ReadFileTool(), {"path": str(_IMG)})
+def test_read_file_hints_read_image_for_images(image_dir: Path) -> None:
+    result = _invoke(ReadFileTool(), {"path": "1.jpg"})
     assert result.is_error is True
     assert "read_image" in result.content
 
 
-def test_read_file_still_reads_text():
-    result = _invoke(ReadFileTool(), {"path": str(_TXT)})
+def test_read_file_still_reads_text(image_dir: Path) -> None:
+    (image_dir / "app.toml").write_text(
+        'name = "desk-agent"\nrequires = ["hatchling"]\n', encoding="utf-8"
+    )
+    result = _invoke(ReadFileTool(), {"path": "app.toml"})
     assert result.is_error is False
     assert isinstance(result.content, str)
     assert "hatchling" in result.content
@@ -96,14 +114,14 @@ def test_read_file_still_reads_text():
 # ---------- attachments 辅助 ----------
 
 
-def test_image_content_block_roundtrip():
-    block = image_content_block(str(_IMG))
+def test_image_content_block_roundtrip(image_dir: Path) -> None:
+    block = image_content_block("1.jpg")
     assert block["type"] == "image"
     assert block["source"]["media_type"] == "image/jpeg"
-    assert base64.b64decode(block["source"]["data"]) == _IMG.read_bytes()
+    assert base64.b64decode(block["source"]["data"]) == _JPEG_BYTES
 
 
-def test_image_block_placeholder_no_base64_leak():
+def test_image_block_placeholder_no_base64_leak() -> None:
     block = {
         "type": "image",
         "source": {
@@ -120,7 +138,7 @@ def test_image_block_placeholder_no_base64_leak():
 # ---------- 下游链路安全 ----------
 
 
-def test_truncate_tool_results_keeps_list_content():
+def test_truncate_tool_results_keeps_list_content() -> None:
     messages = [
         {
             "role": "user",
@@ -142,7 +160,7 @@ def test_truncate_tool_results_keeps_list_content():
     assert tool_result["content"][1]["type"] == "image"
 
 
-def test_messages_to_text_redacts_image_blocks():
+def test_messages_to_text_redacts_image_blocks() -> None:
     messages = [
         {
             "role": "user",
@@ -157,7 +175,7 @@ def test_messages_to_text_redacts_image_blocks():
     assert "QUJDREU=" not in text  # base64 不泄露
 
 
-def test_estimate_tokens_counts_image_as_fixed():
+def test_estimate_tokens_counts_image_as_fixed() -> None:
     messages = [
         {
             "role": "user",
@@ -172,7 +190,7 @@ def test_estimate_tokens_counts_image_as_fixed():
     assert estimate >= IMAGE_TOKEN_ESTIMATE
 
 
-def test_estimate_image_tokens_extension_point():
+def test_estimate_image_tokens_extension_point() -> None:
     # 未来按尺寸精确估算的扩展点：当前返回固定占位值
     block = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAAA"}}
     assert estimate_image_tokens(block) == IMAGE_TOKEN_ESTIMATE

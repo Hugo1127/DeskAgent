@@ -5,19 +5,15 @@ import fnmatch
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
 from desk_agent.core.bus.envelope import EventPushEnvelope
 from desk_agent.core.trace.record import TraceRecord
 from desk_agent.core.trace.writer import TraceWriter
+from desk_agent.core.utils import now_utc as _now
 
 logger = logging.getLogger(__name__)
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 @dataclass

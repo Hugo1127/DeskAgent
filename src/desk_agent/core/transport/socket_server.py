@@ -31,6 +31,7 @@ from desk_agent.core.bus.envelope import (
 from desk_agent.core.trace.record import TraceRecord
 from desk_agent.core.trace.writer import TraceWriter
 from desk_agent.core.transport.ipc_broadcaster import IpcEventBroadcaster
+from desk_agent.core.utils import now_utc as _now
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +44,6 @@ _TS_WINDOW_S = 60
 
 # 每个连接处理协程中，当前正在处理的 writer（供 handler 读取连接上下文）
 _writer_var: ContextVar[asyncio.StreamWriter] = ContextVar("_writer_var")
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 # 返回当前 handler 调用所属连接的 StreamWriter

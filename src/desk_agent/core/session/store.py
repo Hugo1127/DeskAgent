@@ -7,15 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from desk_agent.core.session.model import Session
+from desk_agent.core.utils import now_utc as _now
 
 logger = logging.getLogger(__name__)
 
 MessageContent = str | list[dict[str, Any]]
-
-
-# 返回当前 UTC 时间的 ISO 8601 字符串
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class SessionStore:

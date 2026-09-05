@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import tomllib
 from dataclasses import dataclass, field
@@ -7,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_HOST = "127.0.0.1"
 _DEFAULT_PORT = 9986
@@ -131,6 +134,7 @@ def get_config() -> DeskConfig:
             _apply_toml(config, data)
 
     _apply_env(config)
+    _warn_ipc_security_downgrade(config)
     return config
 
 
@@ -504,3 +508,19 @@ def _apply_env(config: DeskConfig) -> None:
     web_log_file = os.environ.get("DESK_WEB_LOG_FILE")
     if web_log_file is not None:
         config.web.log_file = web_log_file
+
+
+# 最终生效值关闭了 IPC 认证 / TLS 时输出 WARNING，避免用户不知情地关闭 IPC 安全
+def _warn_ipc_security_downgrade(config: DeskConfig) -> None:
+    if not config.auth:
+        logger.warning(
+            "config: IPC auth is DISABLED (auth=False)——连接不再校验令牌。"
+            "仅限本机调试，请通过 DESK_IPC_AUTH / [core] auth 恢复默认开启。"
+            "参见 docs/COMMUNICATION_SECURITY.md"
+        )
+    if not config.tls:
+        logger.warning(
+            "config: IPC TLS is DISABLED (tls=False)——传输不加密，凭据与内容可能被本机嗅探。"
+            "仅限本机调试，请通过 DESK_IPC_TLS / [core] tls 恢复默认开启。"
+            "参见 docs/COMMUNICATION_SECURITY.md"
+        )

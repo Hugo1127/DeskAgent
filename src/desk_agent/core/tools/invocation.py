@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -21,6 +20,7 @@ from desk_agent.core.llm.types import ToolCallBlock
 from desk_agent.core.tools.base import ToolResult
 from desk_agent.core.tools.errors import RateLimitedError
 from desk_agent.core.tools.registry import ToolRegistry
+from desk_agent.core.utils import now_utc as _now
 
 if TYPE_CHECKING:
     from desk_agent.core.permissions.manager import PermissionManager
@@ -29,10 +29,6 @@ _DEFAULT_TIMEOUT: float = 120.0
 _MAX_RETRIES: int = 2
 _RETRY_BASE_S: float = 2.0  # backoff base; tests can monkeypatch to 0
 _RETRYABLE: frozenset[str] = frozenset({"runtime_error", "rate_limited"})
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 # 将 ToolResult.content 转为 TUI/事件展示用的纯文本：str 原样返回；

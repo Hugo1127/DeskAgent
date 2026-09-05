@@ -2,27 +2,15 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
-import uuid
 from pathlib import Path
+
+from _tmpdir import _TmpDir
 
 from desk_agent.core.bus.envelope import HandlerError
 from desk_agent.core.events.bus import EventBus
 from desk_agent.core.session.manager import SessionManager
 from desk_agent.core.session.model import Session
 from desk_agent.core.session.store import SessionStore
-
-
-class _TmpDir:
-    def __init__(self) -> None:
-        self.path = Path(f".tmp-sess-{uuid.uuid4().hex[:12]}")
-        self.path.mkdir()
-
-    def __enter__(self) -> Path:
-        return self.path
-
-    def __exit__(self, *exc: object) -> None:
-        shutil.rmtree(self.path, ignore_errors=True)
 
 
 def _session(sid: str, updated_at: str) -> Session:

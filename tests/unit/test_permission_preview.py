@@ -169,6 +169,17 @@ def test_preview_write_file_rejects_traversal() -> None:
     assert "path traversal" in text
 
 
+def test_preview_write_file_rejects_absolute_path() -> None:
+    text = _preview_write_file({"path": str(Path("/etc/escape.txt")), "content": "x"})
+    assert "absolute path not allowed" in text
+
+
+async def test_preview_path_stat_rejects_absolute_path() -> None:
+    # 真实工具已拒绝绝对路径，dry-run 预览也应同步拒绝（不泄露元数据）
+    text = await preview_tool("read_file", {"path": str(Path("/etc/passwd"))})
+    assert "absolute path not allowed" in text
+
+
 def test_find_bash_env_override(monkeypatch) -> None:
     # DESK_BASH_PATH 指向不存在的文件时，沿探测链回退（无 bash/git 则 None）
     monkeypatch.setenv("DESK_BASH_PATH", "C:/no/such/bash.exe")

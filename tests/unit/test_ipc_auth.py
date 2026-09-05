@@ -1,32 +1,20 @@
-﻿"""IPC 通信安全单元测试：run 文件、自签证书与 TLS 握手、防重放校验。
+"""IPC 通信安全单元测试：run 文件、自签证书与 TLS 握手、防重放校验。
 
 注：沙箱环境会锁定 tempfile / pytest 创建的目录（无法删除），
-因此本文件自建临时目录（pathlib + uuid），测试结束后 shutil.rmtree 清理。
+因此测试使用共享 _TmpDir 在工作区自建临时目录，结束后清理。
 """
 from __future__ import annotations
 
 import asyncio
 import os
-import shutil
 import ssl
 import time
-import uuid
 from pathlib import Path
+
+from _tmpdir import _TmpDir
 
 from desk_agent.core.transport import runfile, tls
 from desk_agent.core.transport.socket_server import check_seq, check_ts
-
-
-class _TmpDir:
-    def __init__(self) -> None:
-        self.path = Path(f".tmp-ipc-{uuid.uuid4().hex[:12]}")
-        self.path.mkdir()
-
-    def __enter__(self) -> Path:
-        return self.path
-
-    def __exit__(self, *exc: object) -> None:
-        shutil.rmtree(self.path, ignore_errors=True)
 
 
 def test_runfile_roundtrip() -> None:

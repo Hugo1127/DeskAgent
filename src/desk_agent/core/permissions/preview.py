@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from desk_agent.core.tools.path_guard import require_relative_path
+
 _MAX_PREVIEW_CHARS = 4000
 _MAX_DIFF_LINES = 60
 _MAX_DIFF_CHARS = 2500
@@ -178,10 +180,11 @@ async def _preview_bash(params: dict[str, Any]) -> str:
 def _preview_write_file(params: dict[str, Any]) -> str:
     path_str = str(params.get("path", ""))
     content = str(params.get("content", ""))
-    if ".." in Path(path_str).parts:
-        return _clip(f"⚠ path traversal 被拒绝: {path_str}")
+    try:
+        path = require_relative_path(path_str)
+    except PermissionError as exc:
+        return _clip(f"⚠ 路径校验被拒绝: {exc}")
 
-    path = Path(path_str)
     encoded = content.encode("utf-8")
     exists = path.exists()
     lines = [f"目标文件: {path.resolve()}", f"已存在: {exists}"]
@@ -216,10 +219,11 @@ def _preview_write_file(params: dict[str, Any]) -> str:
 # 文件类只读工具的元数据预览（read_file / read_image / list_dir）
 def _preview_path_stat(tool_name: str, params: dict[str, Any]) -> str:
     path_str = str(params.get("path", "."))
-    if ".." in Path(path_str).parts:
-        return _clip(f"⚠ path traversal 被拒绝: {path_str}")
+    try:
+        path = require_relative_path(path_str)
+    except PermissionError as exc:
+        return _clip(f"⚠ 路径校验被拒绝: {exc}")
 
-    path = Path(path_str)
     lines = [f"{tool_name} 参数: path={path_str!r}"]
     try:
         st = path.stat()

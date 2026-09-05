@@ -8,3 +8,8 @@ from datetime import UTC
 # 各模块原各自维护一份 `_now()`，现收敛到此处，避免某处忘记 UTC 导致时间 bug。
 def now_utc() -> str:
     return datetime.datetime.now(UTC).isoformat()
+
+
+# 返回当前 UTC 时间的紧凑时间戳（YYYYMMDD_HHMMSS），用于生成文件名
+def compact_ts() -> str:
+    return datetime.datetime.now(UTC).strftime("%Y%m%d_%H%M%S")

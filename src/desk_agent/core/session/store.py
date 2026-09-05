@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from desk_agent.core.session.model import Session
+from desk_agent.core.utils import compact_ts
 from desk_agent.core.utils import now_utc as _now
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ class SessionStore:
     # 将压缩后的消息对覆盖写入 thread.jsonl，原文件备份为 thread_<ts>.jsonl.bak
     def write_compacted(self, sid: str, messages: list[dict[str, Any]]) -> None:
         path = self.session_dir(sid) / "thread.jsonl"
-        ts_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        ts_str = compact_ts()
         bak = self.session_dir(sid) / f"thread_{ts_str}.jsonl.bak"
         if path.exists():
             path.rename(bak)

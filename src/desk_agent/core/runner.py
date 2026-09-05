@@ -41,6 +41,8 @@ from desk_agent.core.trace.provider import TracingProvider
 from desk_agent.core.trace.writer import TraceWriter
 from desk_agent.core.utils import now_utc as _now
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class RunOutcome:
@@ -238,7 +240,7 @@ class AgentRunner:
                 if not context.is_done():
                     context.mark_failed("cancelled")
             except Exception:
-                logging.getLogger(__name__).exception(
+                logger.exception(
                     "agent run failed run_id=%s step=%d", run_id, context.step
                 )
                 if not context.is_done():

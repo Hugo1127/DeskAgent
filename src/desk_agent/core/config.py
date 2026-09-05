@@ -373,15 +373,17 @@ def _apply_env(config: DeskConfig) -> None:
         try:
             config.port = int(port_str)
         except ValueError:
-            raise SystemExit(f"Config error: DESK_PORT must be an integer, got: {port_str!r}")
+            raise SystemExit(
+                f"Config error: DESK_PORT must be an integer, got: {port_str!r}"
+            ) from None
 
     # IPC 通信安全开关（DESK_IPC_AUTH / DESK_IPC_TLS），默认开启
-    ipc_auth = os.environ.get("DESK_IPC_AUTH")
+    ipc_auth = _env_flag("DESK_IPC_AUTH")
     if ipc_auth is not None:
-        config.auth = ipc_auth.lower() not in ("0", "false", "no")
-    ipc_tls = os.environ.get("DESK_IPC_TLS")
+        config.auth = ipc_auth
+    ipc_tls = _env_flag("DESK_IPC_TLS")
     if ipc_tls is not None:
-        config.tls = ipc_tls.lower() not in ("0", "false", "no")
+        config.tls = ipc_tls
 
     log_level = os.environ.get("DESK_LOG_LEVEL")
     if log_level is not None:
@@ -408,23 +410,23 @@ def _apply_env(config: DeskConfig) -> None:
         except ValueError:
             raise SystemExit(
                 f"Config error: DESK_MAX_STEPS must be an integer, got: {max_steps_str!r}"
-            )
+            ) from None
 
     default_model = os.environ.get("DESK_LLM_DEFAULT_MODEL")
     if default_model is not None:
         config.llm.default_model = default_model
 
-    trace_enabled = os.environ.get("DESK_TRACE_ENABLED")
+    trace_enabled = _env_flag("DESK_TRACE_ENABLED")
     if trace_enabled is not None:
-        config.trace.enabled = trace_enabled.lower() not in ("0", "false", "no")
+        config.trace.enabled = trace_enabled
 
     trace_file = os.environ.get("DESK_TRACE_FILE")
     if trace_file is not None:
         config.trace.file = trace_file
 
-    trace_payload = os.environ.get("DESK_TRACE_INCLUDE_LLM_PAYLOAD")
+    trace_payload = _env_flag("DESK_TRACE_INCLUDE_LLM_PAYLOAD")
     if trace_payload is not None:
-        config.trace.include_llm_payload = trace_payload.lower() not in ("0", "false", "no")
+        config.trace.include_llm_payload = trace_payload
 
     perm_timeout = os.environ.get("DESK_PERMISSION_TIMEOUT_S")
     if perm_timeout is not None:
@@ -438,7 +440,7 @@ def _apply_env(config: DeskConfig) -> None:
         except ValueError:
             raise SystemExit(
                 f"Config error: DESK_PERMISSION_TIMEOUT_S must be a number, got: {perm_timeout!r}"
-            )
+            ) from None
 
     compact_threshold = os.environ.get("DESK_COMPACT_THRESHOLD")
     if compact_threshold is not None:
@@ -453,7 +455,7 @@ def _apply_env(config: DeskConfig) -> None:
         except ValueError:
             raise SystemExit(
                 f"Config error: DESK_COMPACT_THRESHOLD must be a number, got: {compact_threshold!r}"
-            )
+            ) from None
 
     compact_tool_limit = os.environ.get("DESK_COMPACT_TOOL_LIMIT")
     if compact_tool_limit is not None:
@@ -469,7 +471,7 @@ def _apply_env(config: DeskConfig) -> None:
             raise SystemExit(
                 "Config error: DESK_COMPACT_TOOL_LIMIT must be an integer,"
                 f" got: {compact_tool_limit!r}"
-            )
+            ) from None
 
     compact_tool_keep = os.environ.get("DESK_COMPACT_TOOL_KEEP")
     if compact_tool_keep is not None:
@@ -485,7 +487,7 @@ def _apply_env(config: DeskConfig) -> None:
             raise SystemExit(
                 "Config error: DESK_COMPACT_TOOL_KEEP must be an integer,"
                 f" got: {compact_tool_keep!r}"
-            )
+            ) from None
 
     # desk-web 配置（DESK_WEB_HOST / DESK_WEB_PORT / DESK_WEB_TOKEN / DESK_WEB_LOG_FILE）
     web_host = os.environ.get("DESK_WEB_HOST")
@@ -499,7 +501,7 @@ def _apply_env(config: DeskConfig) -> None:
         except ValueError:
             raise SystemExit(
                 f"Config error: DESK_WEB_PORT must be an integer, got: {web_port_str!r}"
-            )
+            ) from None
 
     web_token = os.environ.get("DESK_WEB_TOKEN")
     if web_token is not None:
@@ -508,6 +510,15 @@ def _apply_env(config: DeskConfig) -> None:
     web_log_file = os.environ.get("DESK_WEB_LOG_FILE")
     if web_log_file is not None:
         config.web.log_file = web_log_file
+
+
+# 解析 DESK_* 布尔开关；语义与历史实现保持一致：
+# 值为 "0" / "false" / "no"（不区分大小写）时视为关闭，其余非空值为开启，未设置返回 None
+def _env_flag(name: str) -> bool | None:
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    return raw.lower() not in ("0", "false", "no")
 
 
 # 最终生效值关闭了 IPC 认证 / TLS 时输出 WARNING，避免用户不知情地关闭 IPC 安全

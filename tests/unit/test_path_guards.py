@@ -1,4 +1,4 @@
-"""路径安全单元测试：read_file / read_image / list_dir 拒绝绝对路径与路径遍历。
+"""路径安全单元测试：read_file / read_image / list_dir / write_file 拒绝绝对路径与路径遍历。
 
 工具文档约定 path 必须相对当前工作目录；早期实现只拦截 ".."，
 不拦截绝对路径（含 Windows "/x" 盘根相对路径）会构成路径遍历漏洞。
@@ -13,6 +13,7 @@ import pytest
 from desk_agent.core.tools.builtin.list_dir import ListDirTool
 from desk_agent.core.tools.builtin.read_file import ReadFileTool
 from desk_agent.core.tools.builtin.read_image import ReadImageTool
+from desk_agent.core.tools.builtin.write_file import WriteFileTool
 
 
 def _invoke(tool, params: dict[str, object]):
@@ -60,6 +61,23 @@ def test_list_dir_rejects_absolute_path() -> None:
 def test_list_dir_rejects_parent_traversal() -> None:
     with pytest.raises(PermissionError, match="path traversal not allowed"):
         _invoke(ListDirTool(), {"path": ".."})
+
+
+def test_write_file_rejects_absolute_path() -> None:
+    with pytest.raises(PermissionError, match="absolute path not allowed"):
+        _invoke(WriteFileTool(), {"path": str(Path("/etc/x.txt")), "content": "x"})
+
+
+def test_write_file_rejects_parent_traversal() -> None:
+    with pytest.raises(PermissionError, match="path traversal not allowed"):
+        _invoke(WriteFileTool(), {"path": "../escape.txt", "content": "x"})
+
+
+def test_write_file_relative_path_still_works(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = _invoke(WriteFileTool(), {"path": "sub/new.txt", "content": "hi"})
+    assert result.is_error is False
+    assert (tmp_path / "sub" / "new.txt").read_text(encoding="utf-8") == "hi"
 
 
 def test_relative_paths_still_work(tmp_path: Path, monkeypatch) -> None:

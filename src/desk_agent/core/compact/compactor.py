@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from desk_agent.core.bus.events import ContextCompactedEvent
 from desk_agent.core.events.bus import EventBus
 from desk_agent.core.llm.image_blocks import estimate_image_tokens, image_block_placeholder
+from desk_agent.core.utils import compact_ts as _ts_compact
 from desk_agent.core.utils import now_utc as _now
 
 if TYPE_CHECKING:
@@ -45,11 +45,6 @@ discovered during the run.
 
 Be concise. Omit reasoning steps and intermediate attempts. Keep conclusions.\
 """
-
-
-# 返回当前 UTC 时间的简短时间戳字符串（用于文件名）
-def _ts_compact() -> str:
-    return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
 
 @dataclass

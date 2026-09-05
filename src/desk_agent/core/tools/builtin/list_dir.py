@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from desk_agent.core.tools.base import BaseTool, ToolResult
+from desk_agent.core.tools.path_guard import require_relative_path
 
 _MAX_DEPTH = 4
 _MAX_ENTRIES = 200
@@ -40,16 +41,13 @@ class ListDirTool(BaseTool):
         "required": [],
     }
 
-    # 以树状格式列出目录内容，深度和条数有上限
+    # 以树状格式列出目录内容（仅相对路径），深度和条数有上限
     async def invoke(self, params: dict[str, object]) -> ToolResult:
         p = ListDirParams.model_validate(params)
         path_str = p.path
         max_depth = p.max_depth
 
-        if ".." in Path(path_str).parts:
-            raise PermissionError(f"path traversal not allowed: {path_str}")
-
-        root = Path(path_str)
+        root = require_relative_path(path_str)
         if not root.exists():
             raise FileNotFoundError(f"no such directory: {path_str}")
         if not root.is_dir():

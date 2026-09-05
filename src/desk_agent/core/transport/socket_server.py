@@ -113,23 +113,22 @@ class SocketServer:
     def register(self, method: str, handler: CommandHandler) -> None:
         self._handlers[method] = handler
 
-    # 启动 TCP 服务器；若端口已被占用则退出进程
+    # 启动 TCP 服务器；直接尝试绑定，端口被占用/不可用时按 OSError 退出进程
+    # （不再用 open_connection 试探端口，避免对已监听连接造成误报）
     async def start(self) -> str:
         try:
-            _r, w = await asyncio.open_connection(self._host, self._port)
-            w.close()
-            await w.wait_closed()
-            raise SystemExit(f"core already running at {self._host}:{self._port}")
-        except (ConnectionRefusedError, OSError):
-            pass
-
-        self._server = await asyncio.start_server(
-            self._handle_connection,
-            host=self._host,
-            port=self._port,
-            limit=_MAX_LINE_BYTES,
-            ssl=self._ssl_context,
-        )
+            self._server = await asyncio.start_server(
+                self._handle_connection,
+                host=self._host,
+                port=self._port,
+                limit=_MAX_LINE_BYTES,
+                ssl=self._ssl_context,
+            )
+        except OSError as exc:
+            raise SystemExit(
+                f"core already running or port unavailable at "
+                f"{self._host}:{self._port} ({exc})"
+            ) from exc
         return f"{self._host}:{self._port}"
 
     # 关闭服务器：先取消仍在执行的命令任务，再断开所有活跃连接，最后等待服务器关闭（各步均限时）

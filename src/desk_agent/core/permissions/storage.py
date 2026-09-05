@@ -1,31 +1,46 @@
 from __future__ import annotations
 
+import logging
+import tomllib
 from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_POLICY_PATH = Path("~/.desk/policy.toml")
 
+_VALID_DECISIONS = ("allow", "deny")
 
-# 加载 policy.toml 中 [always] 节，返回 {tool_name: "allow"/"deny"}；文件不存在时返回空字典
+
+# 加载 policy.toml 中 [always] 节，返回 {tool_name: "allow"/"deny"}；
+# 文件不存在、非法 TOML 或读取出错时返回空字典（记 WARNING，不阻断启动）
 def load_policy_file(path: Path | None = None) -> dict[str, str]:
     p = (path or _DEFAULT_POLICY_PATH).expanduser()
     if not p.exists():
         return {}
+    try:
+        with open(p, "rb") as f:
+            data = tomllib.load(f)
+    except (tomllib.TOMLDecodeError, OSError) as exc:
+        logger.warning(
+            "policy: failed to parse %s (%s); ignoring [always] entries", p, exc
+        )
+        return {}
+
+    always_raw: Any = data.get("always", {})
+    if not isinstance(always_raw, dict):
+        logger.warning("policy: [always] must be a table in %s; ignoring", p)
+        return {}
+
     result: dict[str, str] = {}
-    in_always = False
-    for line in p.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped == "[always]":
-            in_always = True
-            continue
-        if stripped.startswith("["):
-            in_always = False
-            continue
-        if in_always and "=" in stripped and not stripped.startswith("#"):
-            k, _, v = stripped.partition("=")
-            k = k.strip()
-            v = v.strip().strip('"')
-            if v in ("allow", "deny"):
-                result[k] = v
+    for tool, decision in always_raw.items():
+        if isinstance(tool, str) and isinstance(decision, str) and decision in _VALID_DECISIONS:
+            result[tool] = decision
+        else:
+            logger.warning(
+                "policy: ignoring invalid [always] entry %r = %r in %s",
+                tool, decision, p,
+            )
     return result
 
 

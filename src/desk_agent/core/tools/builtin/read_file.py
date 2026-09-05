@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from pydantic import BaseModel, ConfigDict
 
 from desk_agent.core.llm.image_blocks import image_suffix
 from desk_agent.core.tools.base import BaseTool, ToolResult
+from desk_agent.core.tools.path_guard import require_relative_path
 
 _MAX_BYTES = 512 * 1024  # 512 KB
 
@@ -35,14 +34,10 @@ class ReadFileTool(BaseTool):
         "required": ["path"],
     }
 
-    # 读取文件内容；超 512KB 截断；禁止 .. 路径遍历；图片文件提示改用 read_image
+    # 读取文件内容；超 512KB 截断；仅允许相对路径（拒绝 .. 与绝对路径）；图片文件提示改用 read_image
     async def invoke(self, params: dict[str, object]) -> ToolResult:
         path_str = ReadFileParams.model_validate(params).path
-
-        if ".." in Path(path_str).parts:
-            raise PermissionError(f"path traversal not allowed: {path_str}")
-
-        path = Path(path_str)
+        path = require_relative_path(path_str)
         suffix = image_suffix(path_str)
         if suffix is not None:
             return ToolResult(

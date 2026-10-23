@@ -202,6 +202,7 @@ uv run python scripts/gen_protocol_doc.py --check  # 校验协议文档与代码
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) — 运维手册（启动 / 停止 / 配置 / 常见错误）
 - [docs/COMMUNICATION_SECURITY.md](docs/COMMUNICATION_SECURITY.md) — IPC 通信安全（令牌认证 + TLS + 防重放）
 - [docs/IMAGE_SUPPORT.md](docs/IMAGE_SUPPORT.md) — 图片多模态识别（read_image 工具）
+- [docs/SKILLS.md](docs/SKILLS.md) — Skill 加载与执行机制（设计稿，规划中未落地）
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — 性能优化方案（结论 + A/B/C/D 清单，规划中未落地）
 - [docs/NETWORK_SANDBOX.md](docs/NETWORK_SANDBOX.md) — 网络沙箱（L1 强制网络审批层，规划未实现）
 

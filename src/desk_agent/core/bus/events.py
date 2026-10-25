@@ -159,8 +159,10 @@ class PermissionRequestedEvent(BaseModel):
     param_preview: str
     session_id: str
     ts: str
-    # 命中决策链层级（如 tier2_outside_cwd），可选字段，兼容旧客户端
+    # 命中决策链层级（如 tier2_outside_cwd / cache.session），可选字段，兼容旧客户端
     tier: str = ""
+    # 强制审批屏障（黑名单 / 越界路径）：客户端只应展示单次允许 / 单次拒绝
+    forced: bool = False
     # 人类可读的审批原因（为什么触发询问），可选字段
     decision_reason: str = ""
 
@@ -169,18 +171,22 @@ class PermissionGrantedEvent(BaseModel):
     type: Literal["permission.granted"] = "permission.granted"
     run_id: str
     tool_use_id: str
-    # "allow_once" | "always_allow" | "always_allow_global" | "auto_allow"
+    # "allow_once" | "session_allow" | "always_allow_global" | "auto_allow"
     decision: str
     ts: str
+    # 所属会话，供多会话客户端过滤（旧事件缺省为空）
+    session_id: str = ""
 
 
 class PermissionDeniedEvent(BaseModel):
     type: Literal["permission.denied"] = "permission.denied"
     run_id: str
     tool_use_id: str
-    # "deny_once" | "always_deny" | "always_deny_global" | "auto_deny"
+    # "deny_once" | "session_deny" | "always_deny_global" | "auto_deny" | "timeout"
     decision: str
     ts: str
+    # 所属会话，供多会话客户端过滤（旧事件缺省为空）
+    session_id: str = ""
 
 
 class SubagentStartedEvent(BaseModel):

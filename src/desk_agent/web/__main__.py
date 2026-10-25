@@ -7,35 +7,36 @@ from __future__ import annotations
 
 import argparse
 import logging
-import logging.handlers
 import os
 import threading
 import webbrowser
-from pathlib import Path
 
 import uvicorn
 
 from desk_agent.core.config import get_config
+from desk_agent.core.logging_setup import open_rotating_file_handler
 from desk_agent.web.bridge import CoreBridge
 from desk_agent.web.server import WebServerConfig, create_app
 
 
 # desk-web 文件日志初始化：不写 stderr（保持前台输出干净），只写滚动文件
 def _setup_logging(level: str, log_file: str) -> None:
-    log_path = Path(log_file).expanduser()
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    handler = logging.handlers.RotatingFileHandler(
-        log_path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, level.upper(), logging.DEBUG))
+    root.handlers.clear()
+    handler, _error = open_rotating_file_handler(
+        log_file, max_bytes=5 * 1024 * 1024, backup_count=3
     )
+    if handler is None:
+        # 日志文件不可用时降级为不记录（保持前台输出干净），Web 服务继续可用
+        root.addHandler(logging.NullHandler())
+        return
     handler.setFormatter(
         logging.Formatter(
             'level=%(levelname)s ts=%(asctime)s source=%(name)s msg="%(message)s"',
             datefmt="%Y-%m-%dT%H:%M:%S",
         )
     )
-    root = logging.getLogger()
-    root.setLevel(getattr(logging, level.upper(), logging.DEBUG))
-    root.handlers.clear()
     root.addHandler(handler)
 
 

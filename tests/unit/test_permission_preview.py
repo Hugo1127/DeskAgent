@@ -38,6 +38,7 @@ def test_trace_evaluate_default_ask_bash() -> None:
     assert trace.tier == "tier4_default"
     assert "ask" in trace.reason
     assert trace.bypassable_by_cache is True
+    assert trace.forced is False
 
 
 def test_trace_evaluate_deny_pattern_forces_ask() -> None:
@@ -47,6 +48,7 @@ def test_trace_evaluate_deny_pattern_forces_ask() -> None:
     assert trace.tier == "tier1_deny_pattern"
     assert "rm" in trace.matched_rule
     assert trace.bypassable_by_cache is False
+    assert trace.forced is True
 
 
 def test_default_bash_deny_patterns_force_ask() -> None:
@@ -63,6 +65,7 @@ def test_trace_evaluate_outside_cwd_forced_ask() -> None:
     assert trace.decision == PermissionDecision.ASK
     assert trace.tier == "tier2_outside_cwd"
     assert trace.bypassable_by_cache is False
+    assert trace.forced is True
 
 
 @pytest.mark.parametrize(
@@ -122,11 +125,11 @@ async def test_manager_preview_reflects_session_cache() -> None:
     assert result["ok"] is True
     assert "命令（不执行" in result["preview_text"]
 
-    # session always_allow 后：预览应反映真实决策链
-    mgr._session_always[("sess-1", "bash")] = "allow"
+    # session_allow 后：预览应反映真实决策链
+    mgr._session_cache[("sess-1", "bash")] = "allow"
     result = await mgr.preview("toolu_1", "bash", {"command": "echo hi"}, "sess-1")
     assert result["decision"] == "allow"
-    assert result["tier"] == "tier3_session_cache"
+    assert result["tier"] == "cache.session"
     # 预览不注册 pending，不影响后续真实审批
     assert mgr._pending == {}
 
@@ -170,15 +173,124 @@ async def test_check_and_wait_ask_emits_trace() -> None:
 
 # ---------- 分级缓存与黑名单优先级 ----------
 
+async def test_barrier_always_global_does_not_write_cache(tmp_path: Path) -> None:
+    """安全屏障弹窗上的记忆型决策必须降级为单次决策，绝不写 session / policy.toml。"""
+    policy_file = tmp_path / "policy.toml"
+    mgr = PermissionManager(policy_file=policy_file)
+    events: list[dict] = []
+
+    async def emit(raw: dict) -> None:
+        events.append(raw)
+
+    task = asyncio.create_task(
+        mgr.check_and_wait(
+            "t1", "bash", {"command": "rm -rf build"}, "s1", emit
+        )
+    )
+    while not events:
+        await asyncio.sleep(0)
+    assert events[0]["forced"] is True
+    assert events[0]["tier"] == "tier1_deny_pattern"
+
+    mgr.respond("t1", "always_allow_global")
+    allowed, decision = await task
+    assert allowed is True
+    # 降级为 allow_once，事件/日志不会误报「已全局放行」
+    assert decision == "allow_once"
+    assert mgr._persistent_always == {}
+    assert ("s1", "bash") not in mgr._session_cache
+    assert not policy_file.exists()
+    # 后续非屏障 bash 仍需审批
+    assert (
+        mgr._trace("bash", {"command": "echo hi"}, "s1").decision
+        == PermissionDecision.ASK
+    )
+
+
+async def test_barrier_session_deny_downgraded_without_cache() -> None:
+    mgr = PermissionManager()
+    events: list[dict] = []
+
+    async def emit(raw: dict) -> None:
+        events.append(raw)
+
+    task = asyncio.create_task(
+        mgr.check_and_wait(
+            "t1", "bash", {"command": "cat /etc/passwd"}, "s1", emit
+        )
+    )
+    while not events:
+        await asyncio.sleep(0)
+    mgr.respond("t1", "session_deny")
+    allowed, decision = await task
+    assert allowed is False
+    assert decision == "deny_once"
+    assert ("s1", "bash") not in mgr._session_cache
+
+
+async def test_invalid_decision_falls_back_to_deny_once(tmp_path: Path) -> None:
+    policy_file = tmp_path / "policy.toml"
+    mgr = PermissionManager(policy_file=policy_file, timeout_s=0)
+    events: list[dict] = []
+
+    async def emit(raw: dict) -> None:
+        events.append(raw)
+
+    task = asyncio.create_task(
+        mgr.check_and_wait("t1", "bash", {"command": "echo hi"}, "s1", emit)
+    )
+    while not events:
+        await asyncio.sleep(0)
+    mgr.respond("t1", "allow_everything")
+    allowed, decision = await task
+    assert allowed is False
+    assert decision == "deny_once"
+    assert mgr._persistent_always == {}
+    assert not policy_file.exists()
+
+
+async def test_preview_reports_forced_flag() -> None:
+    mgr = PermissionManager()
+    result = await mgr.preview("t1", "bash", {"command": "cat /etc/passwd"}, "s1")
+    assert result["forced"] is True
+    assert result["tier"] == "tier2_outside_cwd"
+
+    safe = await mgr.preview("t1", "bash", {"command": "echo hi"}, "s1")
+    assert safe["forced"] is False
+
+
+async def test_release_session_clears_cache_and_pending() -> None:
+    mgr = PermissionManager(timeout_s=0)
+    mgr._session_cache[("s2", "bash")] = "allow"
+    events: list[dict] = []
+
+    async def emit(raw: dict) -> None:
+        events.append(raw)
+
+    task = asyncio.create_task(
+        mgr.check_and_wait("t1", "bash", {"command": "ls"}, "s1", emit)
+    )
+    while not events:
+        await asyncio.sleep(0)
+    mgr._session_cache[("s1", "bash")] = "allow"
+
+    mgr.release_session("s1")
+    allowed, decision = await task
+    assert allowed is False
+    assert decision == "deny_once"
+    assert ("s1", "bash") not in mgr._session_cache
+    assert ("s2", "bash") in mgr._session_cache
+
+
 def test_session_allow_does_not_leak_to_other_session() -> None:
     mgr = PermissionManager(
         policies={"bash": ToolPolicy(default=PermissionDecision.ASK)}
     )
-    mgr._apply_response("always_allow", "sess-a", "bash")
+    mgr._apply_response("session_allow", "sess-a", "bash")
     a = mgr._trace("bash", {"command": "ls"}, "sess-a")
     b = mgr._trace("bash", {"command": "ls"}, "sess-b")
     assert a.decision == PermissionDecision.ALLOW
-    assert a.tier == "tier3_session_cache"
+    assert a.tier == "cache.session"
     assert b.decision == PermissionDecision.ASK
     assert b.tier == "tier4_default"
 
@@ -188,10 +300,10 @@ def test_session_deny_overrides_global_allow() -> None:
         policies={"bash": ToolPolicy(default=PermissionDecision.ASK)}
     )
     mgr._persistent_always["bash"] = "allow"
-    mgr._apply_response("always_deny", "sess-x", "bash")
+    mgr._apply_response("session_deny", "sess-x", "bash")
     trace = mgr._trace("bash", {"command": "ls"}, "sess-x")
     assert trace.decision == PermissionDecision.DENY
-    assert trace.tier == "tier3_session_cache"
+    assert trace.tier == "cache.session"
 
 
 def test_global_allow_cross_session_and_persists(tmp_path: Path) -> None:
@@ -200,11 +312,11 @@ def test_global_allow_cross_session_and_persists(tmp_path: Path) -> None:
     mgr._apply_response("always_allow_global", "sess-1", "bash")
     assert mgr._persistent_always["bash"] == "allow"
     # global 决策不写 session 缓存，避免删除 toml 条目后残留
-    assert ("sess-1", "bash") not in mgr._session_always
+    assert ("sess-1", "bash") not in mgr._session_cache
     # 跨 session 生效
     assert (
         mgr._trace("bash", {"command": "ls"}, "sess-2").tier
-        == "tier4_persistent_cache"
+        == "cache.global"
     )
     # 重启后从 policy.toml 加载仍生效
     mgr2 = PermissionManager(policy_file=f)
@@ -219,15 +331,15 @@ def test_global_deny_writes_only_persistent(tmp_path: Path) -> None:
     mgr = PermissionManager(policy_file=f)
     mgr._apply_response("always_deny_global", "sess-1", "bash")
     assert mgr._persistent_always["bash"] == "deny"
-    assert ("sess-1", "bash") not in mgr._session_always
+    assert ("sess-1", "bash") not in mgr._session_cache
     assert f.exists()
 
 
-def test_session_always_does_not_persist(tmp_path: Path) -> None:
+def test_session_cache_does_not_persist(tmp_path: Path) -> None:
     f = tmp_path / "policy.toml"
     mgr = PermissionManager(policy_file=f)
-    mgr._apply_response("always_allow", "sess-1", "bash")
-    assert mgr._session_always[("sess-1", "bash")] == "allow"
+    mgr._apply_response("session_allow", "sess-1", "bash")
+    assert mgr._session_cache[("sess-1", "bash")] == "allow"
     assert mgr._persistent_always == {}
     assert not f.exists()
 
@@ -240,10 +352,10 @@ def test_default_deny_overridden_by_session_allow() -> None:
         mgr._trace("bash", {"command": "ls"}, "s").decision
         == PermissionDecision.DENY
     )
-    mgr._apply_response("always_allow", "s", "bash")
+    mgr._apply_response("session_allow", "s", "bash")
     trace = mgr._trace("bash", {"command": "ls"}, "s")
     assert trace.decision == PermissionDecision.ALLOW
-    assert trace.tier == "tier3_session_cache"
+    assert trace.tier == "cache.session"
 
 
 def test_deny_pattern_overrides_toml_allow() -> None:
@@ -272,7 +384,7 @@ def test_safe_command_toml_allow() -> None:
     mgr._persistent_always["bash"] = "allow"
     trace = mgr._trace("bash", {"command": "echo hi"}, "s")
     assert trace.decision == PermissionDecision.ALLOW
-    assert trace.tier == "tier4_persistent_cache"
+    assert trace.tier == "cache.global"
 
 
 def test_outside_cwd_overrides_toml_allow() -> None:

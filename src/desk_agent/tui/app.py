@@ -10,7 +10,7 @@ from rich.markdown import Markdown
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.widget import Widget
@@ -141,8 +141,54 @@ class ToolCallBlock(Widget):
             self.add_class("expanded")
 
 
-class PermissionSelect(Static):
-    """内联权限选择控件：挂载在日志流中，键盘焦点无需 ModalScreen。"""
+class PermissionChoice(Static):
+    """单个审批选项：支持鼠标点击，也支持键盘高亮选择（TUI 版的「按钮」）。"""
+
+    class Chosen(Message):
+        # 初始化消息，携带被点击的选项
+        def __init__(self, choice: PermissionChoice) -> None:
+            self.choice = choice
+            super().__init__()
+
+    # 初始化选项，记录决策字符串、展示文案与快捷键提示
+    def __init__(self, decision: str, label: str, key_hint: str) -> None:
+        self.decision = decision
+        self._label = label
+        self._key_hint = key_hint
+        self._highlighted = False
+        super().__init__("", classes="perm-choice")
+
+    def on_mount(self) -> None:
+        self._refresh()
+
+    # 设置高亮状态（键盘光标所在行）
+    def set_highlighted(self, highlighted: bool) -> None:
+        if highlighted == self._highlighted:
+            return
+        self._highlighted = highlighted
+        self._refresh()
+
+    # 重新渲染选项文本
+    def _refresh(self) -> None:
+        if self._highlighted:
+            self.update(
+                f"[bold cyan]❯ {self._label}[/bold cyan]"
+                f"  [dim]{self._key_hint}[/dim]"
+            )
+        else:
+            self.update(f"  {self._label}  [dim]{self._key_hint}[/dim]")
+
+    # 鼠标点击：发布 Chosen 消息，由 PermissionSelect 统一处理
+    def on_click(self) -> None:
+        self.post_message(self.Chosen(self))
+
+
+class PermissionSelect(Vertical):
+    """内联权限选择控件：挂载在日志流中，键盘焦点无需 ModalScreen。
+
+    每个选项都是独立的可点击 widget，因此 TUI 里也能像 Web 一样「点按钮审批」；
+    键盘操作（↑↓ / Enter / 数字或字母快捷键 / p 预览）保持不变。
+    """
 
     can_focus = True
 
@@ -152,22 +198,41 @@ class PermissionSelect(Static):
         padding: 0 2;
         margin-bottom: 1;
     }
+    PermissionSelect .perm-header {
+        color: $error;
+        text-style: bold;
+    }
+    PermissionSelect .perm-choice {
+        height: auto;
+        padding: 0 1;
+    }
+    PermissionSelect .perm-choice:hover {
+        background: $boost;
+    }
+    PermissionSelect .perm-hint {
+        color: $text-muted;
+    }
     """
 
     _CHOICES: tuple[tuple[str, str, str], ...] = (
         ("allow_once",         "Allow once",          "y / 1"),
-        ("always_allow",       "Always allow",        "a / 2"),
-        ("always_allow_global","Always allow (global)","A / 3"),
+        ("session_allow",      "Allow for session",   "a / 2"),
+        ("always_allow_global","Allow globally",      "A / 3"),
         ("deny_once",          "Deny",                "n / 4"),
-        ("always_deny",        "Always deny",         "d / 5"),
-        ("always_deny_global", "Always deny (global)", "D / 6"),
+        ("session_deny",       "Deny for session",    "d / 5"),
+        ("always_deny_global", "Deny globally",       "D / 6"),
+    )
+    # 安全屏障命中时只允许单次决策（记忆型决策不写缓存，展示出来只会误导）
+    _FORCED_CHOICES: tuple[tuple[str, str, str], ...] = (
+        ("allow_once", "Allow once", "y / 1"),
+        ("deny_once",  "Deny",       "n / 4"),
     )
     _KEY_MAP: dict[str, str] = {
         "y": "allow_once",          "1": "allow_once",
-        "a": "always_allow",        "2": "always_allow",
+        "a": "session_allow",       "2": "session_allow",
         "A": "always_allow_global", "3": "always_allow_global",
         "n": "deny_once",           "4": "deny_once",
-        "d": "always_deny",         "5": "always_deny",
+        "d": "session_deny",        "5": "session_deny",
         "D": "always_deny_global",  "6": "always_deny_global",
     }
 
@@ -195,22 +260,52 @@ class PermissionSelect(Static):
         *,
         tier: str = "",
         decision_reason: str = "",
+        forced: bool = False,
     ) -> None:
-        super().__init__("")
+        super().__init__()
         self._tool_use_id = tool_use_id
         self._tier = tier
         self._decision_reason = decision_reason
+        self._forced = forced or tier in ("tier1_deny_pattern", "tier2_outside_cwd")
+        self._choices = self._FORCED_CHOICES if self._forced else self._CHOICES
         self._cursor = 0
+        self._decided = False
+
+    # 组装标题（可选）、可点击的选项行与底部快捷键提示
+    def compose(self) -> ComposeResult:
+        if self._forced:
+            yield Static(
+                "⚠ 安全屏障：本次仅支持单次允许 / 拒绝，不会写入缓存",
+                classes="perm-header",
+            )
+        for decision, label, key_hint in self._choices:
+            yield PermissionChoice(decision, label, key_hint)
+        yield Static(self._hint_text(), classes="perm-hint")
 
     def on_mount(self) -> None:
-        self.update(self._render_ui())
+        self._sync_highlight()
         self.focus()
         log.debug(
-            "PermissionSelect.on_mount  can_focus=%s  focused_after=%r",
+            "PermissionSelect.on_mount  can_focus=%s  focused_after=%r  forced=%s",
             self.can_focus,
             self.app.focused,
+            self._forced,
         )
         self.app.call_after_refresh(self._log_deferred_focus)
+
+    # 底部快捷键提示；安全屏障下明确告知不能记住
+    def _hint_text(self) -> str:
+        if self._forced:
+            return "↑↓ navigate   enter confirm   p preview   （安全屏障不可记住）"
+        return (
+            "↑↓ navigate   enter confirm   p preview"
+            "   session=当前会话   global=跨会话"
+        )
+
+    # 将光标行同步到各选项控件的高亮状态
+    def _sync_highlight(self) -> None:
+        for index, choice in enumerate(self.query(PermissionChoice)):
+            choice.set_highlighted(index == self._cursor)
 
     # 在下一帧记录焦点是否真正转移到本控件
     def _log_deferred_focus(self) -> None:
@@ -232,26 +327,6 @@ class PermissionSelect(Static):
     def on_blur(self, event: events.Blur) -> None:
         log.debug("PermissionSelect.on_blur  app.focused=%r", self.app.focused)
 
-    # 生成带光标高亮的选项列表文本
-    def _render_ui(self) -> str:
-        lines: list[str] = []
-        forced = self._tier in ("tier1_deny_pattern", "tier2_outside_cwd")
-        if forced:
-            lines.append(
-                "[bold red]  ⚠ 安全屏障：黑名单 / 越界路径，需显式审批"
-                "（缓存与 policy.toml 放行不生效）[/bold red]"
-            )
-        for i, (_, label, key_hint) in enumerate(self._CHOICES):
-            if i == self._cursor:
-                lines.append(f"  [bold cyan]❯ {label}[/bold cyan]  [dim]{key_hint}[/dim]")
-            else:
-                lines.append(f"    {label}  [dim]{key_hint}[/dim]")
-        lines.append(
-            "[dim]  ↑↓ navigate   enter confirm   p preview"
-            "   session=当前会话   global=跨会话[/dim]"
-        )
-        return "\n".join(lines)
-
     # 方向键导航；快捷键直接选择；enter 确认光标位置
     def on_key(self, event: events.Key) -> None:
         log.debug("PermissionSelect.on_key  key=%r  char=%r", event.key, event.character)
@@ -261,23 +336,48 @@ class PermissionSelect(Static):
             self._request_preview()
         elif key in ("up", "k"):
             event.stop()
-            self._cursor = (self._cursor - 1) % len(self._CHOICES)
-            self.update(self._render_ui())
+            self._cursor = (self._cursor - 1) % len(self._choices)
+            self._sync_highlight()
         elif key in ("down", "j"):
             event.stop()
-            self._cursor = (self._cursor + 1) % len(self._CHOICES)
-            self.update(self._render_ui())
+            self._cursor = (self._cursor + 1) % len(self._choices)
+            self._sync_highlight()
         elif key == "enter":
             event.stop()
-            self._pick(self._CHOICES[self._cursor][0])
+            self._pick(self._choices[self._cursor][0])
         else:
             decision = self._KEY_MAP.get(key)
             if decision is not None:
                 event.stop()
+                if decision not in {choice[0] for choice in self._choices}:
+                    self._notify_forced()
+                    return
                 self._pick(decision)
+
+    # 鼠标点击某个选项后同步光标并提交决策
+    def on_permission_choice_chosen(self, msg: PermissionChoice.Chosen) -> None:
+        msg.stop()
+        decision = msg.choice.decision
+        for index, (choice_decision, _, _) in enumerate(self._choices):
+            if choice_decision == decision:
+                self._cursor = index
+                break
+        self._sync_highlight()
+        self._pick(decision)
+
+    # 安全屏障下用户按到 always 快捷键时，在提示行说明原因
+    def _notify_forced(self) -> None:
+        try:
+            hint = self.query_one(".perm-hint", Static)
+        except NoMatches:
+            return
+        hint.update("[yellow]安全屏障命中：仅支持 y/1（允许一次）或 n/4（拒绝一次）[/yellow]")
 
     # 发布决策消息，由宿主 App 负责 IPC 回复和控件清理
     def _pick(self, decision: str) -> None:
+        if self._decided:
+            return
+        self._decided = True
         log.debug("PermissionSelect._pick  decision=%s", decision)
         self.post_message(self.Decided(self, self._tool_use_id, decision))
 
@@ -292,11 +392,11 @@ class PermissionBlock(Static):
 
     _LABEL_MAP: dict[str, str] = {
         "allow_once":          "allowed (once)",
-        "always_allow":        "always allowed (session)",
-        "always_allow_global": "always allowed (global)",
+        "session_allow":       "allowed for session",
+        "always_allow_global": "allowed globally",
         "deny_once":           "denied",
-        "always_deny":         "always denied (session)",
-        "always_deny_global":  "always denied (global)",
+        "session_deny":        "denied for session",
+        "always_deny_global":  "denied globally",
         "timeout":             "⏱ timed out",
     }
     LABEL_MAP = _LABEL_MAP
@@ -341,7 +441,7 @@ class PermissionBlock(Static):
         if self._resolved:
             return
         self._resolved = True
-        allowed = decision in ("allow_once", "always_allow", "always_allow_global")
+        allowed = decision in ("allow_once", "session_allow", "always_allow_global")
         icon = "[bold green]✓[/bold green]" if allowed else "[bold red]✗[/bold red]"
         label = self._LABEL_MAP.get(decision, decision)
         preview = f"  [dim]{self._param_preview}[/dim]" if self._param_preview else ""
@@ -571,6 +671,8 @@ class DeskTuiApp(App[None]):
         self._current_llm: LLMStreamBlock | None = None
         self._pending_tool_blocks: dict[str, ToolCallBlock] = {}
         self._pending_permission_blocks: dict[str, PermissionBlock] = {}
+        # tool_use_id → 内联审批控件；并发审批时按 id 精准移除，避免误删其他请求
+        self._permission_selects: dict[str, PermissionSelect] = {}
         self._session_id: str | None = None
         self._busy = False
         self._last_context_pct: float = 0.0
@@ -636,33 +738,33 @@ class DeskTuiApp(App[None]):
     # 记录按键焦点；当 PermissionSelect 失去焦点后作为兜底处理权限快捷键
     def on_key(self, event: events.Key) -> None:
         log.debug("App.on_key  key=%r  focused=%r", event.key, self.focused)
-        if not self._pending_permission_blocks:
+        if not self._permission_selects:
             return
-        try:
-            select = self.query_one(PermissionSelect)
-            if select.has_focus:
-                return  # PermissionSelect 有焦点时自行处理，事件不会冒泡到这里
-            key = event.key
-            decision = PermissionSelect._KEY_MAP.get(key)
-            if decision:
-                event.stop()
+        select = list(self._permission_selects.values())[-1]
+        if select.has_focus:
+            return  # PermissionSelect 有焦点时自行处理，事件不会冒泡到这里
+        key = event.key
+        decision = PermissionSelect._KEY_MAP.get(key)
+        if decision is not None:
+            event.stop()
+            if decision not in {choice[0] for choice in select._choices}:
+                select._notify_forced()
+            else:
                 select._pick(decision)
-            elif key in ("p", "?"):
-                event.stop()
-                select._request_preview()
-            elif key in ("up", "k"):
-                event.stop()
-                select._cursor = (select._cursor - 1) % len(PermissionSelect._CHOICES)
-                select.update(select._render_ui())
-            elif key in ("down", "j"):
-                event.stop()
-                select._cursor = (select._cursor + 1) % len(PermissionSelect._CHOICES)
-                select.update(select._render_ui())
-            elif key == "enter":
-                event.stop()
-                select._pick(PermissionSelect._CHOICES[select._cursor][0])
-        except Exception:
-            pass
+        elif key in ("p", "?"):
+            event.stop()
+            select._request_preview()
+        elif key in ("up", "k"):
+            event.stop()
+            select._cursor = (select._cursor - 1) % len(select._choices)
+            select._sync_highlight()
+        elif key in ("down", "j"):
+            event.stop()
+            select._cursor = (select._cursor + 1) % len(select._choices)
+            select._sync_highlight()
+        elif key == "enter":
+            event.stop()
+            select._pick(select._choices[select._cursor][0])
 
     # 退出前尽力关闭当前 session，失败也不阻塞 TUI 退出
     async def action_quit(self) -> None:
@@ -741,9 +843,18 @@ class DeskTuiApp(App[None]):
     async def on_permission_select_decided(self, msg: PermissionSelect.Decided) -> None:
         tool_use_id = msg.tool_use_id
         decision = msg.decision
+        # 重复消息（例如点击后同一帧又按了回车）只处理一次
+        if tool_use_id not in self._pending_permission_blocks:
+            return
         log.info("permission decided tool_use_id=%s decision=%s", tool_use_id, decision)
         try:
-            msg.widget.remove()
+            # 按 tool_use_id 精准移除对应控件；并发审批时不会误删其他请求
+            select = self._permission_selects.get(tool_use_id)
+            if select is not None:
+                del self._permission_selects[tool_use_id]
+                select.remove()
+            else:
+                msg.widget.remove()
             perm_block = self._pending_permission_blocks.pop(tool_use_id, None)
             if perm_block is not None:
                 perm_block._resolve(decision)
@@ -753,17 +864,34 @@ class DeskTuiApp(App[None]):
                         "permission.respond",
                         {"tool_use_id": tool_use_id, "decision": decision},
                     )
-                except (IpcError, RuntimeError, OSError):
-                    pass
-            if not self._pending_permission_blocks:
-                p = self._prompt()
-                if p is not None:
-                    p.disabled = False
-                    p.read_only = False
-                    p.border_title = "type a message — enter to send, ⌘/⇧/⌥+enter for newline"
-                    p.focus()
+                except (IpcError, RuntimeError, OSError) as e:
+                    log.warning(
+                        "permission.respond failed tool_use_id=%s: %s", tool_use_id, e
+                    )
+                    self._append(Static(
+                        f"[red]permission respond failed: {e}[/red]",
+                        classes="log-line",
+                    ))
+            self._focus_next_permission()
         except Exception:
             log.exception("on_permission_select_decided failed tool_use_id=%s", tool_use_id)
+
+    # 处理完一个审批后：还有待审批则把焦点交给剩余控件，否则恢复输入框
+    def _focus_next_permission(self) -> None:
+        if self._permission_selects:
+            next_select = list(self._permission_selects.values())[-1]
+            if next_select.is_attached:
+                next_select.focus()
+            return
+        if self._pending_permission_blocks:
+            # 控件缺失时保持输入框禁用，等待超时 / 断连事件收尾
+            return
+        prompt = self._prompt()
+        if prompt is not None:
+            prompt.disabled = False
+            prompt.read_only = False
+            prompt.border_title = "type a message — enter to send, ⌘/⇧/⌥+enter for newline"
+            prompt.focus()
 
     # 处理内联审批控件的 dry-run 预览请求：IPC 请求并把结果追加到日志流
     async def on_permission_select_preview_requested(
@@ -790,6 +918,8 @@ class DeskTuiApp(App[None]):
             f"[bold]preview[/bold]  decision={result.get('decision', '')}  "
             f"{result.get('tier', '')}"
         )
+        if result.get("forced"):
+            meta += "  [yellow]forced（仅单次）[/yellow]"
         if result.get("reason"):
             meta += f"  [dim]- {result['reason']}[/dim]"
         self._append(Static(meta, classes="log-line"))
@@ -1120,11 +1250,17 @@ class DeskTuiApp(App[None]):
                 prompt.disabled = True
                 prompt.border_title = "permission required"
             self._append(perm_block)
+            tier = str(event.get("tier") or "")
             select = PermissionSelect(
                 tool_use_id,
-                tier=str(event.get("tier") or ""),
+                tier=tier,
                 decision_reason=str(event.get("decision_reason") or ""),
+                forced=bool(event.get("forced", False)) or tier in (
+                    "tier1_deny_pattern",
+                    "tier2_outside_cwd",
+                ),
             )
+            self._permission_selects[tool_use_id] = select
             self._mount_permission_select(select)
             log.debug(
                 "PermissionSelect mounted before #prompt  pending=%d",
@@ -1139,18 +1275,12 @@ class DeskTuiApp(App[None]):
             if tool_use_id in self._pending_permission_blocks:
                 perm_block = self._pending_permission_blocks.pop(tool_use_id)
                 perm_block._resolve(decision)
-                try:
-                    select = self.query_one(PermissionSelect)
-                    select.remove()
-                except Exception:
-                    pass
-                if not self._pending_permission_blocks:
-                    p = self._prompt()
-                    if p is not None:
-                        p.disabled = False
-                        p.read_only = False
-                        p.border_title = "type a message — enter to send, ⌘/⇧/⌥+enter for newline"
-                        p.focus()
+                # 按 tool_use_id 精准移除，绝不能误删其他并发审批的控件
+                pending_select = self._permission_selects.get(tool_use_id)
+                if pending_select is not None:
+                    del self._permission_selects[tool_use_id]
+                    pending_select.remove()
+                self._focus_next_permission()
 
         elif t == "log.line":
             level = event.get("level", "INFO")

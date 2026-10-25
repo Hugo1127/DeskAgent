@@ -10,10 +10,10 @@ from desk_agent.core.transport.socket_client import IpcError
 
 _DECISION_MAP: dict[str, str] = {
     "y": "allow_once",
-    "a": "always_allow",
+    "a": "session_allow",
     "A": "always_allow_global",
     "n": "deny_once",
-    "d": "always_deny",
+    "d": "session_deny",
     "D": "always_deny_global",
 }
 
@@ -50,16 +50,24 @@ class ChatPrinter:
             if reason:
                 print(f"  {reason}")
             tier = str(event.get("tier", ""))
-            if tier in ("tier1_deny_pattern", "tier2_outside_cwd"):
+            forced = bool(event.get("forced", False)) or tier in (
+                "tier1_deny_pattern",
+                "tier2_outside_cwd",
+            )
+            if forced:
                 print("  ⚠ 安全屏障：黑名单 / 越界路径，需显式审批"
                       "（缓存与 policy.toml 放行不生效）")
-            print("  y=allow once  a=always allow (session)  A=always allow (global)")
-            print("  n=deny once  d=always deny (session)  D=always deny (global)  p=preview")
+                print("  y=allow once  n=deny once  p=preview"
+                      "  （安全屏障仅支持单次审批）")
+            else:
+                print("  y=allow once  a=allow for session  A=allow globally")
+                print("  n=deny once  d=deny for session  D=deny globally  p=preview")
             self.pending_permission_id = tool_use_id
             self.pending_permission = {
                 "tool_use_id": tool_use_id,
                 "tool_name": tool_name,
                 "params": dict(event.get("params") or {}),
+                "forced": forced,
             }
         elif t == "session.waiting_for_input":
             self._ensure_newline()
@@ -136,6 +144,8 @@ async def _chat_async(config: DeskConfig) -> int:
                         )
                         if result.get("reason"):
                             print(f"  [preview] {result['reason']}")
+                        if result.get("forced"):
+                            print("  [preview] forced：本次仅支持单次允许 / 拒绝")
                         print(result.get("preview_text", "(no preview available)"))
                     continue
                 # 先按原始输入匹配（区分 A/D 的 global 决策），再回退到小写匹配
@@ -143,8 +153,14 @@ async def _chat_async(config: DeskConfig) -> int:
                 if decision is None:
                     decision = _DECISION_MAP.get(content.lower())
                 if decision is None:
-                    print("  enter y (allow once), a/A (always allow session/global), "
-                          "n (deny once), d/D (always deny session/global), p (preview)")
+                    print("  enter y (allow once), a/A (allow session/global), "
+                          "n (deny once), d/D (deny session/global), p (preview)")
+                    continue
+                info = printer.pending_permission
+                if info is not None and info.get("forced") and decision not in (
+                    "allow_once", "deny_once"
+                ):
+                    print("  ⚠ 安全屏障命中：只支持 y（允许一次）或 n（拒绝一次）")
                     continue
                 tool_use_id = printer.pending_permission_id
                 printer.pending_permission_id = None

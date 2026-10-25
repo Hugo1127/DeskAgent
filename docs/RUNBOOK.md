@@ -135,3 +135,5 @@ DESK_BASH_PATH="D:\Programs\Git\usr\bin\bash.exe" uv run desk-core
 | `Address already in use` | 端口被其他进程占用 | `DESK_PORT=9987 uv run desk-core` |
 | `Config error: DESK_PORT must be an integer` | `.env` 或环境变量中端口值非整数 | 检查 `DESK_PORT` 的值 |
 | 预览提示「未找到 bash，跳过语法检查」 | daemon 环境 PATH 无 bash，且 git 不在 PATH（自动推导失效） | 见上文「权限 dry-run 预览的 bash 依赖」：确认 `git` 在 daemon 的 PATH 中（可自动推导非默认安装位置），或设置 `DESK_BASH_PATH` / 加入系统 PATH 后重启 daemon |
+| `PermissionError: [Errno 13] ...\.desk\logs\core.log`（ACL 正常、无进程占用、无杀软） | 进程完整性级别被降为 **Low**：工作区被沙箱工具打了 Low 标签，`.venv` 里的 `python.exe` 继承后无法写 Medium 的 `~/.desk` | 见 [WINDOWS_PERMISSIONS.md](WINDOWS_PERMISSIONS.md)：`icacls "<项目路径>" /setintegritylevel "(OI)(CI)M" /t /c /q` |
+| `file logging disabled: cannot open ...`（WARNING） | 日志文件不可写（被占用 / 只读 / 权限 / 完整性级别），已自动降级为仅输出 stderr，进程继续启动 | 先按上一条排查；修复后重启 daemon 即恢复文件日志 |

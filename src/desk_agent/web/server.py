@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 import desk_agent
 from desk_agent.core.config import DeskConfig
+from desk_agent.core.permissions.policy import PermissionResponseDecision
 from desk_agent.core.transport.socket_client import IpcError
 from desk_agent.web.bridge import CoreBridge
 
@@ -57,7 +58,8 @@ class SendMessageBody(BaseModel):
 
 class PermissionRespondBody(BaseModel):
     tool_use_id: str
-    decision: str
+    # 6 种合法决策；非法值由 Pydantic 返回 422，而不是静默按拒绝处理
+    decision: PermissionResponseDecision
 
 
 class PermissionPreviewBody(BaseModel):

@@ -4,6 +4,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Discriminator, Field
 
+from desk_agent.core.permissions.policy import PermissionResponseDecision
 from desk_agent.core.session.model import SessionMode, SessionStatus
 
 
@@ -102,9 +103,11 @@ class PermissionPreviewCommand(BaseModel):
 class PermissionPreviewResult(BaseModel):
     ok: bool = True
     tool_use_id: str = ""
-    # "allow" | "deny" | "ask"（决策链轨迹与真实审批一致）
+    # 决策链轨迹与真实审批一致
     decision: str = ""
     tier: str = ""
+    # 是否命中强制审批屏障（黑名单 / 越界路径）
+    forced: bool = False
     matched_rule: str = ""
     reason: str = ""
     preview_text: str = ""
@@ -114,9 +117,8 @@ class PermissionPreviewResult(BaseModel):
 class PermissionRespondCommand(BaseModel):
     type: Literal["permission.respond"] = "permission.respond"
     tool_use_id: str
-    # "allow_once" | "always_allow" | "always_allow_global"
-    # | "deny_once" | "always_deny" | "always_deny_global"
-    decision: str
+    # 6 种合法决策；非法值由 Pydantic 直接拒绝（IPC 返回 validation error / Web 返回 422）
+    decision: PermissionResponseDecision
 
 
 class PermissionRespondResult(BaseModel):

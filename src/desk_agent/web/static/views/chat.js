@@ -62,7 +62,8 @@ export function initChat(root) {
   let currentAssistant = null;
   let assistantText = "";
   const toolCards = new Map();
-  const pendingPerms = new Map(); // toolUseId -> { overlay, close }
+  const permEvents = new Map(); // toolUseId -> { evt, sessionId }：待审批事件（含其他会话）
+  const openPerms = new Map(); // toolUseId -> { modal, sessionId }：已弹出的弹窗
   let activeRunId = null;
 
   function scrollToBottom() {
@@ -159,6 +160,60 @@ export function initChat(root) {
     }
   }
 
+  // ---- 权限审批：按会话排队，切换会话时只显示当前会话的弹窗 ----
+  function permSid(evt) {
+    return String(evt.session_id || getState().currentSessionId || "");
+  }
+
+  function recordPerm(evt) {
+    const sid = permSid(evt);
+    if (!sid) return;
+    permEvents.set(String(evt.tool_use_id), { evt, sessionId: sid });
+    renderSessions();
+  }
+
+  function dropPerm(toolUseId) {
+    const key = String(toolUseId);
+    const had = permEvents.delete(key);
+    const open = openPerms.get(key);
+    if (open) {
+      open.modal.close();
+      openPerms.delete(key);
+    }
+    if (had || open) renderSessions();
+  }
+
+  function openPerm(evt) {
+    const key = String(evt.tool_use_id);
+    if (openPerms.has(key) || !permEvents.has(key)) return;
+    const sid = permSid(evt);
+    const modal = permissionModal(evt, async (toolUseId, decision) => {
+      await respondPermission(toolUseId, decision);
+      // 提交成功即视为已处理，避免切换会话后再次弹出
+      permEvents.delete(String(toolUseId));
+      openPerms.delete(String(toolUseId));
+      renderSessions();
+    }, () => previewPermission(evt.tool_use_id, evt.tool_name, evt.params, sid));
+    document.body.appendChild(modal.overlay);
+    modal.focus();
+    openPerms.set(key, { modal, sessionId: sid });
+  }
+
+  // 会话切换时：关闭其他会话的弹窗，弹出当前会话待审批的请求
+  function syncPermModals() {
+    const sid = getState().currentSessionId;
+    for (const [key, open] of [...openPerms]) {
+      if (open.sessionId !== sid) {
+        open.modal.close();
+        openPerms.delete(key);
+      }
+    }
+    if (!sid) return;
+    for (const [key, entry] of [...permEvents]) {
+      if (entry.sessionId === sid && !openPerms.has(key)) openPerm(entry.evt);
+    }
+  }
+
   // 输入框快捷键：Enter 发送，Shift/Ctrl+Enter 换行
   textarea.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
@@ -200,12 +255,18 @@ export function initChat(root) {
     }
     for (const s of sessions) {
       const title = s.title || s.id;
+      const pending = [...permEvents.values()].filter((p) => p.sessionId === s.id).length;
       const item = el("div", {
         class: "session-item" + (s.id === currentSessionId ? " active" : ""),
         onclick: () => doSwitchSession(s.id),
       },
         el("div", { class: "session-title" }, title),
-        el("div", { class: "session-meta" }, `${s.run_count} runs · ${s.status}`),
+        el("div", { class: "session-meta" },
+          `${s.run_count} runs · ${s.status}`,
+          pending
+            ? el("span", { class: "session-meta-pending" }, ` · ${pending} 待审批`)
+            : null,
+        ),
         el("button", {
           class: "session-close",
           title: "Close session",
@@ -223,13 +284,17 @@ export function initChat(root) {
     breakAssistant();
     toolCards.clear();
     setRunStatus("");
-    if (!sessionId) return;
+    if (!sessionId) {
+      syncPermModals();
+      return;
+    }
     try {
       const data = await loadHistory(sessionId);
       renderHistory(data.messages || []);
     } catch (e) {
       appendBlock(el("div", { class: "line err" }, "history error: " + e.message));
     }
+    syncPermModals();
   }
 
   // ---- daemon 事件处理 ----
@@ -317,31 +382,26 @@ export function initChat(root) {
       }
 
       case "permission.requested": {
-        const sid = getState().currentSessionId;
-        const modal = permissionModal(evt, (toolUseId, decision) => {
-          respondPermission(toolUseId, decision).catch((e) => {
-            setRunStatus("permission respond error: " + e.message, "err");
-          });
-        }, () => previewPermission(evt.tool_use_id, evt.tool_name, evt.params, sid));
-        document.body.appendChild(modal.overlay);
-        pendingPerms.set(String(evt.tool_use_id), modal);
+        recordPerm(evt);
+        if (permSid(evt) === getState().currentSessionId) openPerm(evt);
         break;
       }
 
       case "permission.denied": {
-        const key = String(evt.tool_use_id);
-        const modal = pendingPerms.get(key);
-        if (modal) {
-          modal.close();
-          pendingPerms.delete(key);
+        dropPerm(evt.tool_use_id);
+        if (!evt.session_id || evt.session_id === getState().currentSessionId) {
+          appendBlock(el("div", { class: "line muted" }, `✗ permission denied (${evt.decision})`));
         }
-        appendBlock(el("div", { class: "line muted" }, `✗ permission denied (${evt.decision})`));
         break;
       }
 
-      case "permission.granted":
-        appendBlock(el("div", { class: "line ok" }, `✓ permission granted (${evt.decision})`));
+      case "permission.granted": {
+        dropPerm(evt.tool_use_id);
+        if (!evt.session_id || evt.session_id === getState().currentSessionId) {
+          appendBlock(el("div", { class: "line ok" }, `✓ permission granted (${evt.decision})`));
+        }
         break;
+      }
 
       case "log.line": {
         if (evt.level === "ERROR" || evt.level === "WARNING") {
@@ -374,7 +434,9 @@ export function initChat(root) {
   return () => {
     offEvent();
     offState();
-    for (const modal of pendingPerms.values()) modal.close();
+    for (const open of openPerms.values()) open.modal.close();
+    openPerms.clear();
+    permEvents.clear();
     root.removeChild(layout);
   };
 }

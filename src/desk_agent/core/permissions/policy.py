@@ -3,13 +3,38 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 
 class PermissionDecision(StrEnum):
     ALLOW = "allow"
     DENY = "deny"
     ASK = "ask"
+
+
+# 客户端可提交的 6 种审批决策；命令层与 Web 请求体共用这个 Literal 做枚举校验
+PermissionResponseDecision = Literal[
+    "allow_once",
+    "session_allow",
+    "always_allow_global",
+    "deny_once",
+    "session_deny",
+    "always_deny_global",
+]
+
+ALLOW_RESPONSE_DECISIONS: frozenset[str] = frozenset(
+    {"allow_once", "session_allow", "always_allow_global"}
+)
+DENY_RESPONSE_DECISIONS: frozenset[str] = frozenset(
+    {"deny_once", "session_deny", "always_deny_global"}
+)
+# 需要写缓存的决策（session 或 global）；安全屏障命中时必须降级为单次决策
+MEMORY_RESPONSE_DECISIONS: frozenset[str] = frozenset(
+    {"session_allow", "always_allow_global", "session_deny", "always_deny_global"}
+)
+ALL_RESPONSE_DECISIONS: frozenset[str] = (
+    ALLOW_RESPONSE_DECISIONS | DENY_RESPONSE_DECISIONS
+)
 
 
 # 检测 bash 命令是否操作 cwd 之外路径的正则规则列表（强制触发 ASK，不可被 allow_patterns 绕过）。
@@ -52,6 +77,8 @@ class PolicyTrace:
     # 安全屏障（deny_pattern / outside_cwd）为 False：不可被 session/global 缓存覆盖；
     # 策略层（allow_pattern / default / unknown tool）为 True：可被缓存覆盖。
     bypassable_by_cache: bool = True
+    # 强制审批屏障：客户端只应提供「单次允许 / 单次拒绝」，任何记忆型决策都不会写缓存
+    forced: bool = False
 
 
 # bash 命令级黑名单（deny_patterns）：命中后强制 ASK，优先级高于 policy.toml，
@@ -137,6 +164,7 @@ def trace_evaluate(
                     matched_rule=f"deny_pattern: {pat}",
                     reason="命中 deny_patterns 黑名单，强制询问，不可被缓存或 policy.toml 绕过",
                     bypassable_by_cache=False,
+                    forced=True,
                 )
 
     # Tier 2: OUTSIDE_CWD_HEURISTICS — forced ASK, not bypassable
@@ -147,6 +175,7 @@ def trace_evaluate(
             matched_rule="outside-cwd heuristic",
             reason="bash 命令疑似操作工作目录之外路径，强制询问",
             bypassable_by_cache=False,
+            forced=True,
         )
 
     # Tier 3: allow_patterns (bash only)

@@ -41,6 +41,7 @@ from desk_agent.core.bus.commands import (
     SessionSummary,
 )
 from desk_agent.core.bus.envelope import EventPushEnvelope
+from desk_agent.core.bus.events import SessionClosedEvent
 from desk_agent.core.config import DeskConfig, get_config
 from desk_agent.core.events.bus import EventBus
 from desk_agent.core.llm.provider import AnthropicProvider
@@ -115,6 +116,11 @@ class CoreApp:
                 data=event_dict,
             )
         )
+
+    # session 关闭（手动关闭或 one_shot 自动关闭）时回收该会话的权限缓存与挂起请求
+    async def _session_closed_handler(self, event: BaseModel) -> None:
+        if isinstance(event, SessionClosedEvent) and self._permission_manager is not None:
+            self._permission_manager.release_session(event.session_id)
 
     # 启动一次 agent run：异步创建 AgentRunner 并立即返回 run_id
     async def _agent_run_handler(self, params: dict[str, Any]) -> AgentRunResult:
@@ -282,6 +288,7 @@ class CoreApp:
             self._config.permission.timeout_s,
             len(load_policy_file(policy_file)),
         )
+        self._bus.subscribe(self._session_closed_handler)
 
         self._broadcaster = IpcEventBroadcaster(trace=self._trace)
         self._bus.subscribe(self._broadcaster.handle)

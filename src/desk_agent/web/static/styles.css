@@ -228,6 +228,10 @@ code,
   color: var(--muted);
   font-size: 11px;
 }
+.session-meta-pending {
+  color: var(--yellow);
+  font-weight: 600;
+}
 .session-close {
   position: absolute;
   top: 6px;
@@ -548,6 +552,23 @@ code,
   margin-top: 12px;
   color: var(--muted);
   font-size: 12px;
+}
+.modal-status {
+  min-height: 18px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  word-break: break-word;
+}
+.modal-status.err {
+  color: var(--red);
+}
+.modal:focus {
+  outline: none;
+}
+.modal-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ---- 仪表盘 ---- */

@@ -4,7 +4,7 @@
 
 ## 目标
 
-把「网络行为」从 bash 审批中独立出来，做成**不可被 always_allow / allow_patterns / 缓存绕过的强制审批层**：网络命令永远需要当场确认（或按模式 block / allowlist）。
+把「网络行为」从 bash 审批中独立出来，做成**不可被 session_allow / always_allow_global / allow_patterns / 缓存绕过的强制审批层**：网络命令永远需要当场确认（或按模式 block / allowlist）。
 
 ## 设计要点
 
@@ -17,7 +17,7 @@ mode = "ask"   # off | ask | block | allowlist
 
 - **静态检测**（`core/permissions/policy.py` 新增 `NETWORK_HEURISTICS`，与 OUTSIDE_CWD 启发式同构）：curl / wget / git clone|fetch|pull|push / pip install|download / npm install|ci|publish / ssh / scp / nc / telnet / ping / python urllib|socket|requests|http 等；边界匹配避免误伤（`cat curl.txt` 不命中）。
 - **强制层**（`core/permissions/manager.py` 的 `_trace()`，置于 outside-cwd 之后、session 缓存之前）：
-  - `ask`：强制 ASK，审批只接受 `allow_once` / `deny_once`（always_* 不生效、不写缓存）；
+  - `ask`：强制 ASK，审批只接受 `allow_once` / `deny_once`（`session_*` / `always_*_global` 不生效、不写缓存）；
   - `block`：直接拒绝；`allowlist`：仅放行 allow_patterns 显式命中的网络命令，其余拒绝；
   - 该层**不可被 session 缓存 / policy.toml / allow_patterns 绕过**。
 - **dry-run 预览**（`core/permissions/preview.py`）：命中网络规则时标注「将发起网络访问（目标不可静态确定）」。

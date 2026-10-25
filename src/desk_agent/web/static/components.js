@@ -114,9 +114,10 @@ export function toolCard(toolName, params) {
   };
 }
 
-// 权限审批模态框。onDecision(toolUseId, decision) 提交决策；
-// onPreview() 可选，返回 Promise<{decision, tier, reason, preview_text}>，用于 dry-run 预览。
-// 返回 { overlay, close }
+// 权限审批模态框。onDecision(toolUseId, decision) 返回 Promise：
+// 只有提交成功才关闭弹窗；失败时保留弹窗并展示错误，允许重试。
+// onPreview() 可选，返回 Promise<{decision, tier, reason, forced, preview_text}>，用于 dry-run 预览。
+// 返回 { overlay, close, focus }；close() 仅用于服务端已判定（超时/拒绝）或切换会话时强制关闭。
 export function permissionModal(perm, onDecision, onPreview) {
   const {
     tool_use_id: toolUseId,
@@ -126,15 +127,21 @@ export function permissionModal(perm, onDecision, onPreview) {
     tier,
     decision_reason: decisionReason,
   } = perm;
-  const forced = tier === "tier1_deny_pattern" || tier === "tier2_outside_cwd";
-  const choices = [
-    ["allow_once", "Allow once", "allow"],
-    ["always_allow", "Always allow (session)", "allow"],
-    ["always_allow_global", "Always allow (global)", "allow"],
-    ["deny_once", "Deny", "deny"],
-    ["always_deny", "Always deny (session)", "deny"],
-    ["always_deny_global", "Always deny (global)", "deny"],
-  ];
+  const forced = perm.forced === true ||
+    tier === "tier1_deny_pattern" || tier === "tier2_outside_cwd";
+  const choices = forced
+    ? [
+        ["allow_once", "Allow once", "allow"],
+        ["deny_once", "Deny", "deny"],
+      ]
+    : [
+        ["allow_once", "Allow once", "allow"],
+        ["session_allow", "Allow for session", "allow"],
+        ["always_allow_global", "Allow globally", "allow"],
+        ["deny_once", "Deny", "deny"],
+        ["session_deny", "Deny for session", "deny"],
+        ["always_deny_global", "Deny globally", "deny"],
+      ];
 
   const previewArea = el("div", { class: "modal-preview-area" },
     el("div", { class: "modal-preview-muted" },
@@ -146,9 +153,25 @@ export function permissionModal(perm, onDecision, onPreview) {
     disabled: !onPreview,
     title: "预览策略决策链与工具副作用（不执行）",
   });
+  const status = el("div", { class: "modal-status" });
+
+  let submitting = false;
+  let settled = false;
+
+  const buttons = choices.map(([decision, label, kind]) =>
+    el("button", {
+      class: "btn btn-" + kind,
+      onclick: () => submit(decision),
+    }, label),
+  );
 
   const overlay = el("div", { class: "modal-overlay" });
-  const dialog = el("div", { class: "modal", role: "dialog", "aria-modal": "true" },
+  const dialog = el("div", {
+    class: "modal",
+    role: "dialog",
+    "aria-modal": "true",
+    tabindex: "-1",
+  },
     el("div", { class: "modal-title" }, "Permission required"),
     el("div", { class: "modal-tool" },
       el("span", { class: "tc-badge" }, "tool"),
@@ -160,27 +183,54 @@ export function permissionModal(perm, onDecision, onPreview) {
       decisionReason ? "  " + decisionReason : "",
     ) : null,
     forced ? el("div", { class: "modal-forced" },
-      "⚠ 命中安全屏障（黑名单 / 越界路径），必须显式审批；缓存与 policy.toml 放行不生效") : null,
+      "⚠ 命中安全屏障（黑名单 / 越界路径），本次仅支持单次允许 / 拒绝") : null,
     params && Object.keys(params).length
       ? el("pre", { class: "modal-params" }, formatJson(params))
       : null,
     previewArea,
-    el("div", { class: "modal-actions" },
-      previewBtn,
-      ...choices.map(([decision, label, kind]) =>
-        el("button", {
-          class: "btn btn-" + kind,
-          onclick: () => { close(); onDecision(toolUseId, decision); },
-        }, label),
-      ),
-    ),
+    el("div", { class: "modal-actions" }, previewBtn, ...buttons),
+    status,
     el("div", { class: "modal-hint" },
-      el("div", {}, "once — 仅本次调用"),
-      el("div", {}, "session — 当前会话内记住"),
-      el("div", {}, "global — 写入 policy.toml，跨会话生效"),
+      forced
+        ? el("div", {}, "安全屏障：选择不会写入 session 或 policy.toml")
+        : el("div", {},
+            el("div", {}, "once — 仅本次调用"),
+            el("div", {}, "session — 当前会话内记住"),
+            el("div", {}, "global — 写入 policy.toml，跨会话生效"),
+          ),
+      el("div", {}, "Esc = 拒绝本次；点击遮罩不会关闭弹窗"),
     ),
   );
   overlay.appendChild(dialog);
+
+  function setBusy(busy) {
+    previewBtn.disabled = busy || !onPreview;
+    for (const button of buttons) button.disabled = busy;
+  }
+
+  async function submit(decision) {
+    if (submitting || settled) return;
+    if (typeof onDecision !== "function") {
+      status.className = "modal-status err";
+      status.textContent = "当前客户端不支持提交审批";
+      return;
+    }
+    submitting = true;
+    setBusy(true);
+    status.className = "modal-status";
+    status.textContent = "正在提交审批…";
+    try {
+      await onDecision(toolUseId, decision);
+      settled = true;
+      close();
+    } catch (e) {
+      status.className = "modal-status err";
+      status.textContent = "审批提交失败：" + (e && e.message ? e.message : String(e));
+    } finally {
+      submitting = false;
+      if (!settled) setBusy(false);
+    }
+  }
 
   if (onPreview) {
     previewBtn.addEventListener("click", async () => {
@@ -192,6 +242,7 @@ export function permissionModal(perm, onDecision, onPreview) {
       try {
         const r = await onPreview();
         const meta = "decision=" + (r.decision || "?") + "  " + (r.tier || "") +
+          (r.forced ? "  forced（仅单次）" : "") +
           (r.reason ? "  -  " + r.reason : "");
         previewArea.replaceChildren(
           el("div", { class: "modal-preview-meta" }, meta),
@@ -205,20 +256,45 @@ export function permissionModal(perm, onDecision, onPreview) {
           el("div", { class: "modal-preview-err" }, "preview error: " + e.message),
         );
       } finally {
-        previewBtn.disabled = false;
         previewBtn.textContent = "Dry-run preview";
+        previewBtn.disabled = submitting;
       }
     });
   }
 
   function close() {
+    document.removeEventListener("keydown", onDocumentKeydown);
     overlay.remove();
   }
+
+  // 服务端已判定（超时 / 其他客户端已拒绝）或切换会话时使用：不再提交决策
+  function forceClose() {
+    settled = true;
+    close();
+  }
+
+  function focus() {
+    dialog.focus();
+  }
+
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
+    if (e.target !== overlay || settled) return;
+    status.className = "modal-status";
+    status.textContent = "请选择一项审批操作（Esc = 拒绝本次）";
+    dialog.focus();
   });
 
-  return { overlay, close };
+  // Esc = 拒绝本次；只有最上层弹窗响应，避免堆叠时同时拒绝多个请求
+  function onDocumentKeydown(e) {
+    if (e.key !== "Escape" || settled) return;
+    const overlays = document.querySelectorAll(".modal-overlay");
+    if (!overlays.length || overlays[overlays.length - 1] !== overlay) return;
+    e.preventDefault();
+    submit("deny_once");
+  }
+  document.addEventListener("keydown", onDocumentKeydown);
+
+  return { overlay, close: forceClose, focus };
 }
 
 // ISO 时间戳 → 本地可读字符串

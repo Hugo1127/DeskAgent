@@ -118,6 +118,19 @@ def test_permission_respond_forwards() -> None:
         )
 
 
+def test_permission_respond_rejects_unknown_decision() -> None:
+    bridge = _FakeBridge(responses={"permission.respond": {"ok": True}})
+    with make_client(bridge) as client:
+        csrf = client.get("/api/bootstrap").json()["csrf_token"]
+        r = client.post(
+            "/api/permission/respond",
+            json={"tool_use_id": "toolu_1", "decision": "allow_everything"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert r.status_code == 422
+        assert bridge.calls == []
+
+
 def test_permission_preview_forwards() -> None:
     bridge = _FakeBridge(responses={"permission.preview": {"ok": True, "decision": "ask"}})
     with make_client(bridge) as client:

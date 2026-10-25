@@ -134,6 +134,7 @@ async def invoke_tool(
                         run_id=run_id,
                         tool_use_id=tool_call.id,
                         decision=decision,
+                        session_id=session_id,
                         ts=_now(),
                     )
                 )
@@ -144,6 +145,7 @@ async def invoke_tool(
                         run_id=run_id,
                         tool_use_id=tool_call.id,
                         decision=decision,
+                        session_id=session_id,
                         ts=_now(),
                     )
                 )

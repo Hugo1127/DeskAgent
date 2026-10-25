@@ -2,20 +2,18 @@
 
 DeskAgent 是一个**本地 AI Agent 运行时**（mini 版 Claude Code）：以常驻守护进程 + 多客户端架构运行，把「用户目标 → 任务拆解 → Agent Loop → 工具调用 → 权限审批 → 事件流 → 会话记忆 → 上下文压缩」整条链路落地，可接入 Claude 等大模型，支持 Skills、子 Agent 与 MCP 扩展。
 
-> **项目来源**：本项目由 [KamaClaude](https://github.com/youngyangyang04/KamaClaude)（代码随想录：从零实现一个本地 Claude Code Agent 系统）**二次开发**而来——在原有 Agent 运行时内核之上，明确了「个人桌面管家」的产品定位，并持续补齐权限审批、Skills、子 Agent 编排、MCP 扩展、上下文压缩等工程能力。
-
 ## 特性
 
 - **守护进程 + 多客户端**：`desk-core` 常驻后台，CLI / TUI 多客户端接入，断开不中断执行、重连可恢复订阅
 - **ReAct AgentLoop**：plan → act → observe 迭代闭环，支持思考、多步执行、max_steps 兜底
 - **类型化事件流**：Pydantic v2 定义命令与事件，EventBus 驱动，每次 run 落盘 `events.jsonl` 支持回放
-- **分级权限审批（单次 / 会话 / 全局）+ dry-run 预览**：`allow_once / deny_once`、`always_allow / always_deny`（会话内）、`always_allow_global / always_deny_global`（全局），deny_patterns 黑名单与 bash 越界路径强制 ASK 且不可被缓存绕过，全局决策持久化到 `policy.toml`；审批前可一键预览决策链轨迹与只读工具副作用（bash 语法检查 / write_file diff），不执行、不落盘
+- **分级权限审批（单次 / 会话 / 全局）+ dry-run 预览**：`allow_once / deny_once`、`session_allow / session_deny`（会话内）、`always_allow_global / always_deny_global`（全局），deny_patterns 黑名单与 bash 越界路径强制 ASK 且不可被缓存绕过，全局决策持久化到 `policy.toml`；审批前可一键预览决策链轨迹与只读工具副作用（bash 语法检查 / write_file diff），不执行、不落盘
 - **会话记忆 + 上下文治理**：Session / notes 分层延续上下文，水位检测、tool_result 截断、自动/手动压缩（`/compact`）
 - **Skills**：Markdown front-matter 定义行为预设与工具白名单，三级查找覆盖，无需改代码扩展
 - **子 Agent + MCP**：`spawn_agent` 前台/后台编排、事件桥接；MCP 客户端支持 stdio / TCP 接入外部工具
 - **统一系统查询**：内置 `system_query` 工具，一个工具多类别（monitor 系统监控 / port 端口占用 / software 已安装软件），psutil + 注册表只读采集，零审批打扰
 - **三层 Trace + Textual TUI**：IPC / Event / LLM 全链路落盘可回放；TUI 流式渲染、内联审批、Skill 补全
-- **Web 界面（desk-web）**：本地优先的 Web UI（FastAPI 桥接 + vanilla JS 零构建 SPA），聊天 / 四级审批 / 会话管理 / 运行回放 / 仪表盘，与 CLI / TUI 同级
+- **Web 界面（desk-web）**：本地优先的 Web UI（FastAPI 桥接 + vanilla JS 零构建 SPA），聊天 / 分级审批（6 种决策） / 会话管理 / 运行回放 / 仪表盘，与 CLI / TUI 同级
 
 ## 架构
 
@@ -69,7 +67,7 @@ uv run desk-web --open                    # 8. Web 界面（自动开浏览器 �
 | `desk core start / stop / status` | 守护进程管理（后台运行） |
 | `desk-core` | 前台运行守护进程（日志进终端，Ctrl+C 停止） |
 | `desk run --goal "<目标>"` | 单次运行 Agent 任务（事件流实时打印） |
-| `desk chat` | 多轮会话，权限审批用 `y/a/n/d` 响应（`p` 查看 dry-run 预览） |
+| `desk chat` | 多轮会话，权限审批用 `y/a/A/n/d/D` 响应（`p` 查看 dry-run 预览） |
 | `desk trace [run_id]` | 查看 trace（`--layer` / `--direction` / `--raw` / `--follow`） |
 | `desk-tui [--replay <run_id>]` | Textual 终端 UI（可回放历史 run） |
 | `desk-web [--host --port --open]` | Web 界面（`--open` 自动开浏览器） |
@@ -143,7 +141,17 @@ port = 9987            # desk-web 端口（默认 9987，可用 DESK_WEB_PORT �
 | `task_create` / `task_update` / `task_list` / `task_get` | 子任务管理 | 询问 |
 | `spawn_agent` / `agent_result` | 派生子 Agent / 获取后台结果 | 询问 |
 
-权限评估采用**静态策略分层**：deny_patterns（黑名单，命中强制 ASK，优先于 toml，不可绕过）→ bash 越界路径启发式（命中强制 ASK，不可绕过）→ session 级缓存 → 全局缓存（policy.toml）→ allow_patterns → 工具默认策略；命中 ASK 时推送事件给客户端，会话级 `always_allow` / `always_deny` 仅当前 session 生效，全局级 `always_allow_global` / `always_deny_global` 持久化到 `~/.desk/policy.toml` 并跨会话生效。黑名单与越界路径规则见 `src/desk_agent/core/permissions/policy.py`（跨平台：Unix / Windows 盘符 / UNC / 两侧环境变量）。
+权限评估分两步：先做**静态策略分层**（deny_patterns 黑名单 → bash 越界路径启发式 → allow_patterns → 工具默认策略），再查**动态缓存**（当前 session 缓存 `cache.session` → 全局 `policy.toml` 缓存 `cache.global`）。黑名单与越界路径命中后强制 ASK，且 `bypassable_by_cache=False`：缓存与 policy.toml 放行不生效，审批弹窗只提供「单次允许 / 单次拒绝」；即使客户端强行提交 `session_*` / `always_*_global`，服务端也会降级为单次决策且不写缓存。黑名单与越界路径规则见 `src/desk_agent/core/permissions/policy.py`（跨平台：Unix / Windows 盘符 / UNC / 两侧环境变量）。
+
+6 种审批决策：
+
+| 决策 | 生效范围 |
+|------|----------|
+| `allow_once` / `deny_once` | 仅本次工具调用 |
+| `session_allow` / `session_deny` | 当前 session（内存 `cache.session`，session 关闭即回收） |
+| `always_allow_global` / `always_deny_global` | 跨会话（`~/.desk/policy.toml` 的 `[always]`，`cache.global`；按**工具名**记忆） |
+
+CLI 输入 `y/a/A/n/d/D`；TUI 用 ↑↓ + Enter 或数字 `1–6`，也可直接用鼠标点击选项；Web 审批弹窗点击 6 个按钮。命中强制屏障时三端都只显示「允许一次 / 拒绝一次」。审批 60s 超时（`DESK_PERMISSION_TIMEOUT_S`，0 不超时）后按拒绝处理；Web 端 Esc = 拒绝本次，点击遮罩不会静默关闭弹窗。
 
 审批前支持 **dry-run 预览**（CLI chat 按 `p`，TUI 按 `p`，Web 审批弹窗点 Dry-run preview）：返回真实决策链轨迹（命中层级 / 规则 / 原因）与只读副作用预览——bash 仅做 `bash -n` 语法检查与静态危险标注（绝不执行命令）、write_file 展示新旧内容 diff、文件类工具展示 stat 元数据；预览不执行、不写入、不注册审批、不落盘。
 
@@ -174,7 +182,7 @@ src/desk_agent/
 │   ├── bus/ · events/      # 类型化命令/事件模型 + EventBus / events.jsonl
 │   ├── transport/          # TCP server / client + IPC 事件广播
 │   ├── tools/              # BaseTool + 内置工具 + 注册中心
-│   ├── permissions/        # 四级权限审批（policy / manager / storage）
+│   ├── permissions/        # 分级权限审批（6 种决策 / policy / manager / storage）
 │   ├── session/ · compact/ # 会话存储 / 上下文压缩
 │   ├── skills/ · subagent/ · agents/   # Skill 加载 / 子 Agent / 角色档案（TOML）
 │   ├── mcp/ · trace/ · task/ · memory/ # MCP 客户端 / trace / 子任务 / 上下文加载
@@ -205,4 +213,5 @@ uv run python scripts/gen_protocol_doc.py --check  # 校验协议文档与代码
 - [docs/SKILLS.md](docs/SKILLS.md) — Skill 加载与执行机制（设计稿，规划中未落地）
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — 性能优化方案（结论 + A/B/C/D 清单，规划中未落地）
 - [docs/NETWORK_SANDBOX.md](docs/NETWORK_SANDBOX.md) — 网络沙箱（L1 强制网络审批层，规划未实现）
+- [docs/WINDOWS_PERMISSIONS.md](docs/WINDOWS_PERMISSIONS.md) — Windows 权限与完整性级别排查（`~/.desk` 写不进去 / `Activate.ps1` 被拒）
 

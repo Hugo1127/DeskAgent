@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import argparse
 import logging
-import logging.handlers
 import os
-from pathlib import Path
 
 from desk_agent.core.config import get_config
+from desk_agent.core.logging_setup import open_rotating_file_handler
 from desk_agent.tui.app import DeskTuiApp
 
 _DEFAULT_TUI_LOG = "~/.desk/logs/tui.log"
@@ -14,20 +13,24 @@ _DEFAULT_TUI_LOG = "~/.desk/logs/tui.log"
 
 # TUI 文件日志初始化：不写 stderr（避免干扰 Textual 渲染），只写滚动文件
 def _setup_logging(level: str) -> None:
-    log_path = Path(os.environ.get("DESK_TUI_LOG_FILE", _DEFAULT_TUI_LOG)).expanduser()
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    handler = logging.handlers.RotatingFileHandler(
-        log_path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, level.upper(), logging.DEBUG))
+    root.handlers.clear()
+    handler, _error = open_rotating_file_handler(
+        os.environ.get("DESK_TUI_LOG_FILE", _DEFAULT_TUI_LOG),
+        max_bytes=5 * 1024 * 1024,
+        backup_count=3,
     )
+    if handler is None:
+        # 日志文件不可用时静默降级（写 stderr 会破坏 Textual 界面），TUI 继续可用
+        root.addHandler(logging.NullHandler())
+        return
     handler.setFormatter(
         logging.Formatter(
             'level=%(levelname)s ts=%(asctime)s source=%(name)s msg="%(message)s"',
             datefmt="%Y-%m-%dT%H:%M:%S",
         )
     )
-    root = logging.getLogger()
-    root.setLevel(getattr(logging, level.upper(), logging.DEBUG))
-    root.handlers.clear()
     root.addHandler(handler)
 
 

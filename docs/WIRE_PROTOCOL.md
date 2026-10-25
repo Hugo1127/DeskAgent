@@ -359,6 +359,7 @@
 | `tool_use_id` | `string`（默认: ""） | 否 | 工具调用 ID |
 | `decision` | `string`（默认: ""） | 否 | 决策结果 |
 | `tier` | `string`（默认: ""） | 否 | 命中决策层级 |
+| `forced` | `boolean`（默认: false） | 否 | Forced |
 | `matched_rule` | `string`（默认: ""） | 否 | 命中规则 |
 | `reason` | `string`（默认: ""） | 否 | 原因说明 |
 | `preview_text` | `string`（默认: ""） | 否 | 预览文本 |

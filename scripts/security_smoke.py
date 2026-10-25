@@ -311,7 +311,7 @@ async def _scenario_s5(config: Any, port: int) -> None:
             print("  [动作] 未认证连接直接发送 permission.respond 伪造审批")
             await client.send_command(
                 "permission.respond",
-                {"tool_use_id": "toolu_fake_0001", "decision": "always_allow"},
+                {"tool_use_id": "toolu_fake_0001", "decision": "session_allow"},
             )
             _record("S5 伪造权限审批", _FAIL, "未认证的 permission.respond 被接受！")
         except IpcError as e:

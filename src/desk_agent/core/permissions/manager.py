@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from desk_agent.core.permissions.policy import (
+    ALL_RESPONSE_DECISIONS,
+    ALLOW_RESPONSE_DECISIONS,
     DEFAULT_POLICIES,
+    MEMORY_RESPONSE_DECISIONS,
     PermissionDecision,
     PolicyTrace,
     ToolPolicy,
@@ -29,7 +32,7 @@ class _PendingRequest:
     tool_name: str
 
 
-# 管理工具调用权限：策略评估、用户审批挂起、session 级和持久化 always 缓存、超时
+# 管理工具调用权限：策略评估、用户审批挂起、session 级与持久化缓存、超时
 class PermissionManager:
     def __init__(
         self,
@@ -42,7 +45,7 @@ class PermissionManager:
         # tool_use_id → pending Future + metadata
         self._pending: dict[str, _PendingRequest] = {}
         # (session_id, tool_name) → "allow" | "deny"（session 内存，重启丢失）
-        self._session_always: dict[tuple[str, str], str] = {}
+        self._session_cache: dict[tuple[str, str], str] = {}
         # tool_name → "allow" | "deny"（持久化，从 policy_file 加载）
         self._policy_file = policy_file
         self._persistent_always: dict[str, str] = (
@@ -69,16 +72,16 @@ class PermissionManager:
 
         # Tier 3: session 级缓存（内存，仅当前 session）
         session_key = (session_id, tool_name)
-        if session_key in self._session_always:
-            cached = self._session_always[session_key]
+        if session_key in self._session_cache:
+            cached = self._session_cache[session_key]
             return PolicyTrace(
                 decision=(
                     PermissionDecision.ALLOW
                     if cached == "allow" else PermissionDecision.DENY
                 ),
-                tier="tier3_session_cache",
+                tier="cache.session",
                 matched_rule=f"session cache: {cached}",
-                reason=f"本 session 已有 always_{cached} 决策缓存",
+                reason=f"本 session 已有 session_{cached} 决策缓存",
                 bypassable_by_cache=True,
             )
 
@@ -90,9 +93,9 @@ class PermissionManager:
                     PermissionDecision.ALLOW
                     if cached == "allow" else PermissionDecision.DENY
                 ),
-                tier="tier4_persistent_cache",
+                tier="cache.global",
                 matched_rule=f"policy.toml always: {cached}",
-                reason=f"policy.toml 已持久化 always_{cached}",
+                reason=f"policy.toml 已持久化全局 {cached} 决策",
                 bypassable_by_cache=True,
             )
 
@@ -138,6 +141,7 @@ class PermissionManager:
                 "session_id": session_id,
                 "ts": _now(),
                 "tier": trace.tier,
+                "forced": trace.forced,
                 "decision_reason": trace.reason,
             }
         )
@@ -152,8 +156,13 @@ class PermissionManager:
             logger.info("permission: timeout tool_use_id=%s tool=%s", tool_use_id, tool_name)
             return False, "timeout"
 
-        allowed = self._apply_response(raw, session_id, tool_name)
-        return allowed, raw
+        allowed, effective = self._apply_response(
+            raw,
+            session_id,
+            tool_name,
+            memory_allowed=trace.bypassable_by_cache,
+        )
+        return allowed, effective
 
     # dry-run 预览：完整复现决策链 + 只读工具副作用预览。
     # 不注册 pending、不写 policy.toml、不产生任何事件。
@@ -173,6 +182,7 @@ class PermissionManager:
             "tier": trace.tier,
             "matched_rule": trace.matched_rule,
             "reason": trace.reason,
+            "forced": trace.forced,
             "preview_text": preview_text,
             "safe": True,
         }
@@ -186,15 +196,41 @@ class PermissionManager:
         if not req.future.done():
             req.future.set_result(decision)
 
-    # 应用审批决策，分级写入缓存，返回是否放行。
-    # allow_once/deny_once 不写缓存；always_allow/always_deny 只写 session；
+    # 应用审批决策，分级写入缓存，返回 (是否放行, 实际生效的决策)。
+    # allow_once/deny_once 不写缓存；session_allow/session_deny 只写 session；
     # always_allow_global/always_deny_global 只写 persistent + 落盘
     # （不写 session，避免删除 toml 条目后残留）。
-    def _apply_response(self, decision: str, session_id: str, tool_name: str) -> bool:
-        allow = decision in ("allow_once", "always_allow", "always_allow_global")
-        if decision in ("always_allow", "always_deny"):
-            verdict = "allow" if decision == "always_allow" else "deny"
-            self._session_always[(session_id, tool_name)] = verdict
+    # memory_allowed=False（命中安全屏障）时，记忆型决策降级为单次决策且不写任何缓存，
+    # 防止「在屏障弹窗上点 session/global 记住」把整个工具（例如 bash）预授权给后续非屏障调用。
+    def _apply_response(
+        self,
+        decision: str,
+        session_id: str,
+        tool_name: str,
+        *,
+        memory_allowed: bool = True,
+    ) -> tuple[bool, str]:
+        if decision not in ALL_RESPONSE_DECISIONS:
+            logger.error(
+                "permission: invalid decision=%r tool=%s, treating as deny_once",
+                decision, tool_name,
+            )
+            return False, "deny_once"
+
+        allow = decision in ALLOW_RESPONSE_DECISIONS
+
+        if decision in MEMORY_RESPONSE_DECISIONS and not memory_allowed:
+            effective = "allow_once" if allow else "deny_once"
+            logger.warning(
+                "permission: barrier blocks cache write decision=%s tool=%s; "
+                "downgraded to %s",
+                decision, tool_name, effective,
+            )
+            return allow, effective
+
+        if decision in ("session_allow", "session_deny"):
+            verdict = "allow" if decision == "session_allow" else "deny"
+            self._session_cache[(session_id, tool_name)] = verdict
         elif decision in ("always_allow_global", "always_deny_global"):
             verdict = "allow" if decision == "always_allow_global" else "deny"
             self._persistent_always[tool_name] = verdict
@@ -209,7 +245,7 @@ class PermissionManager:
                     )
             else:
                 logger.warning("permission: policy_file is None, skipping persistence")
-        return allow
+        return allow, decision
 
     # 客户端断连时拒绝该 session 所有待审批请求，防止 Future 永久挂起
     def cancel_session(self, session_id: str, reason: str = "client_disconnected") -> None:
@@ -224,3 +260,15 @@ class PermissionManager:
                     "permission: cancel pending tool_use_id=%s reason=%s", uid, reason
                 )
                 req.future.set_result("deny_once")
+
+    # session 关闭时回收该会话的 session 级缓存与挂起请求，避免长驻 daemon 内存增长
+    def release_session(self, session_id: str) -> None:
+        self.cancel_session(session_id, reason="session_closed")
+        stale = [key for key in self._session_cache if key[0] == session_id]
+        for key in stale:
+            self._session_cache.pop(key, None)
+        if stale:
+            logger.debug(
+                "permission: released %d session cache entries for session=%s",
+                len(stale), session_id,
+            )
